@@ -2,6 +2,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.contrib.auth import authenticate, login, logout
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 from .models import Usuario, ConfiguracaoSistema
 from .serializers import UsuarioSerializer, LoginSerializer, PasswordResetRequestSerializer, ConfiguracaoSistemaSerializer
 from .permissions import IsAdministrador
@@ -15,6 +17,7 @@ def get_effective_thresholds(user):
     l2 = user.limiar_laranja_dias if user.limiar_laranja_dias is not None else config.limiar_laranja_dias
     return l1, l2
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -45,6 +48,7 @@ class LogoutView(APIView):
         logout(request)
         return Response({'detail': 'Logout realizado com sucesso.'}, status=status.HTTP_200_OK)
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -63,7 +67,6 @@ class PasswordResetRequestView(APIView):
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
-            # Não revela se o e-mail existe no banco de dados (RF-01)
             return Response({
                 'detail': 'Se o e-mail estiver cadastrado no sistema, você receberá as instruções de redefinição.'
             }, status=status.HTTP_200_OK)

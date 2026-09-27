@@ -1,41 +1,62 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { getTaskTitle } from '../utils/kanbanUtils';
-import { ChevronDown, ChevronUp, MoveRight, User, Calendar, FileText } from 'lucide-react';
+import { getTaskTitle, formatDateBR } from '../utils/kanbanUtils';
+import { ChevronDown, ChevronUp, MoveRight, User, Calendar, FileText, Plus, MoreHorizontal, Check, X, Edit2 } from 'lucide-react';
 
 export const TaskCard = ({
   task,
   isExpanded,
   onToggleExpand,
   onMoveTask,
+  onToggleSubtarefa,
+  onUpdateSubtarefaOption,
+  onAddSubtarefa,
+  onDeleteSubtarefa,
+  onReorderSubtarefa,
+  onEditTask,
   collections
 }) => {
   const [showMoveMenu, setShowMoveMenu] = useState(false);
+  const [activeMenuSubId, setActiveMenuSubId] = useState(null);
+  const [insertingForSubId, setInsertingForSubId] = useState(null);
+  const [insertPosition, setInsertPosition] = useState('below');
+  const [newSubText, setNewSubText] = useState('');
+
   const moveMenuRef = useRef(null);
   const title = getTaskTitle(task);
 
-  // RF-12 & RNF-01: Focar com preventScroll: true para não sobrescrever a rolagem até o fim do menu
   useEffect(() => {
     if (showMoveMenu && moveMenuRef.current) {
       const timer = setTimeout(() => {
         if (moveMenuRef.current) {
-          // 1. Dar foco na primeira opção impedindo a rolagem nativa do .focus()
           const firstOption = moveMenuRef.current.querySelector('button');
           if (firstOption) {
             firstOption.focus({ preventScroll: true });
           }
-          // 2. Rolar o container até o final do menu para exibir todas as opções
           if (typeof moveMenuRef.current.scrollIntoView === 'function') {
             moveMenuRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
           }
         }
       }, 50);
-
       return () => clearTimeout(timer);
     }
   }, [showMoveMenu]);
 
   const handleDragStart = (e) => {
     e.dataTransfer.setData('text/plain', task.id);
+  };
+
+  const handleOpenInsert = (subId, position) => {
+    setInsertingForSubId(subId);
+    setInsertPosition(position);
+    setNewSubText('');
+    setActiveMenuSubId(null);
+  };
+
+  const handleConfirmInsert = () => {
+    if (!newSubText.trim()) return;
+    onAddSubtarefa(task.id, newSubText.trim(), insertingForSubId, insertPosition);
+    setInsertingForSubId(null);
+    setNewSubText('');
   };
 
   return (
@@ -54,7 +75,6 @@ export const TaskCard = ({
       }}
       aria-expanded={isExpanded}
     >
-      {/* Cabeçalho do Cartão — Seleção Exclusiva */}
       <div
         onClick={onToggleExpand}
         role="button"
@@ -85,21 +105,46 @@ export const TaskCard = ({
         </button>
       </div>
 
-      {/* Rótulo de Contato / Responsável Resumido */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.8rem', color: '#4b5563' }}>
         <User size={14} />
         <span>{task.responsavel_nome || 'Sem responsável'}</span>
       </div>
 
-      {/* Visualização Detalhada do Cartão (RF-08) */}
       {isExpanded && (
         <div style={{ marginTop: '0.875rem', paddingTop: '0.75rem', borderTop: '1px dashed #e5e7eb', fontSize: '0.85rem' }}>
-          {task.data_prevista && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', color: '#374151' }}>
-              <Calendar size={14} color="#f59e0b" />
-              <span><strong>Previsão:</strong> {task.data_prevista}</span>
-            </div>
-          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            {task.data_prevista ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#374151' }}>
+                <Calendar size={14} color="#f59e0b" />
+                <span><strong>Previsão:</strong> {formatDateBR(task.data_prevista)}</span>
+              </div>
+            ) : (
+              <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontStyle: 'italic' }}>Sem data prevista</span>
+            )}
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditTask(task);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                backgroundColor: '#eff6ff',
+                color: '#2563eb',
+                border: '1px solid #bfdbfe',
+                borderRadius: '4px',
+                padding: '0.2rem 0.5rem',
+                fontSize: '0.75rem',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              <Edit2 size={12} /> Editar
+            </button>
+          </div>
 
           {task.observacoes && (
             <div style={{ marginBottom: '0.75rem', color: '#4b5563' }}>
@@ -111,22 +156,172 @@ export const TaskCard = ({
             </div>
           )}
 
-          {/* Subtarefas */}
-          {task.subtarefas && task.subtarefas.length > 0 && (
-            <div style={{ marginBottom: '0.75rem' }}>
-              <p style={{ fontWeight: '500', marginBottom: '0.35rem', color: '#374151' }}>Subtarefas:</p>
-              <ul style={{ listStyle: 'none', paddingLeft: 0, margin: 0 }}>
-                {task.subtarefas.map((sub) => (
-                  <li key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', color: '#4b5563' }}>
-                    <input type="checkbox" checked={sub.concluida} readOnly />
-                    <span style={{ textDecoration: sub.concluida ? 'line-through' : 'none' }}>{sub.texto}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <div style={{ marginBottom: '0.75rem' }}>
+            <p style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#374151' }}>Subtarefas:</p>
+            <ul style={{ listStyle: 'none', paddingLeft: 0, margin: 0 }}>
+              {task.subtarefas?.map((sub, index) => {
+                const isInsertingAbove = insertingForSubId === sub.id && insertPosition === 'above';
+                const isInsertingBelow = insertingForSubId === sub.id && insertPosition === 'below';
+                const isFirst = index === 0;
+                const isLast = index === (task.subtarefas.length - 1);
 
-          {/* Menu Alternativo de Movimentação por Teclado (RF-12, RNF-01) */}
+                return (
+                  <React.Fragment key={sub.id}>
+                    {isInsertingAbove && (
+                      <li style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.35rem', paddingLeft: '0.5rem' }}>
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Texto da nova subtarefa..."
+                          value={newSubText}
+                          onChange={(e) => setNewSubText(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleConfirmInsert()}
+                          style={{ flex: 1, padding: '0.25rem 0.5rem', border: '1px solid #3b82f6', borderRadius: '4px', fontSize: '0.8rem' }}
+                        />
+                        <button type="button" onClick={handleConfirmInsert} style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '0.25rem 0.5rem', cursor: 'pointer' }}><Check size={14} /></button>
+                        <button type="button" onClick={() => setInsertingForSubId(null)} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', padding: '0.25rem 0.5rem', cursor: 'pointer' }}><X size={14} /></button>
+                      </li>
+                    )}
+
+                    <li style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px solid #f3f4f6', position: 'relative' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, marginRight: '0.5rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={sub.concluida || sub.opcao_selecionada === 'Concluída'}
+                          onChange={() => onToggleSubtarefa(task.id, sub.id, sub.concluida)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        
+                        {sub.tipo === 'resultado' ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                            <span style={{ fontWeight: '500', color: '#1f2937' }}>Resultado:</span>
+                            <select
+                              value={sub.opcao_selecionada || ''}
+                              onChange={(e) => onUpdateSubtarefaOption(task.id, sub.id, e.target.value)}
+                              style={{ padding: '0.2rem 0.4rem', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.8rem', backgroundColor: '#fff' }}
+                            >
+                              <option value="">[Selecione]</option>
+                              <option value="Concluída">Concluída</option>
+                              <option value="Cancelada">Cancelada</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <span style={{ textDecoration: sub.concluida ? 'line-through' : 'none', color: sub.concluida ? '#9ca3af' : '#374151', fontSize: '0.825rem' }}>
+                            {sub.texto}
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', position: 'relative' }}>
+                        <button
+                          type="button"
+                          title="Adicionar subtarefa abaixo"
+                          onClick={() => handleOpenInsert(sub.id, 'below')}
+                          style={{ background: '#e0f2fe', color: '#0284c7', border: 'none', borderRadius: '4px', padding: '0.2rem 0.35rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        >
+                          <Plus size={13} />
+                        </button>
+
+                        <button
+                          type="button"
+                          title="Opções da subtarefa"
+                          onClick={() => setActiveMenuSubId(activeMenuSubId === sub.id ? null : sub.id)}
+                          style={{ background: '#f3f4f6', color: '#4b5563', border: 'none', borderRadius: '4px', padding: '0.2rem 0.35rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        >
+                          <MoreHorizontal size={13} />
+                        </button>
+
+                        {activeMenuSubId === sub.id && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              right: 0,
+                              top: '100%',
+                              backgroundColor: '#ffffff',
+                              border: '1px solid #d1d5db',
+                              borderRadius: '6px',
+                              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                              zIndex: 20,
+                              minWidth: '175px',
+                              padding: '0.25rem 0'
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleOpenInsert(sub.id, 'above')}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}
+                            >
+                              Adicionar acima
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenInsert(sub.id, 'below')}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}
+                            >
+                              Adicionar abaixo
+                            </button>
+                            {!isFirst && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveMenuSubId(null);
+                                  onReorderSubtarefa(task.id, sub.id, 'up');
+                                }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}
+                              >
+                                Mover subtarefa para cima
+                              </button>
+                            )}
+                            {!isLast && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveMenuSubId(null);
+                                  onReorderSubtarefa(task.id, sub.id, 'down');
+                                }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}
+                              >
+                                Mover subtarefa para baixo
+                              </button>
+                            )}
+                            {sub.tipo !== 'resultado' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveMenuSubId(null);
+                                  onDeleteSubtarefa(task.id, sub.id);
+                                }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', color: '#ef4444', cursor: 'pointer' }}
+                              >
+                                Excluir subtarefa
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+
+                    {isInsertingBelow && (
+                      <li style={{ display: 'flex', gap: '0.35rem', marginTop: '0.35rem', marginBottom: '0.35rem', paddingLeft: '0.5rem' }}>
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Texto da nova subtarefa..."
+                          value={newSubText}
+                          onChange={(e) => setNewSubText(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleConfirmInsert()}
+                          style={{ flex: 1, padding: '0.25rem 0.5rem', border: '1px solid #3b82f6', borderRadius: '4px', fontSize: '0.8rem' }}
+                        />
+                        <button type="button" onClick={handleConfirmInsert} style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '0.25rem 0.5rem', cursor: 'pointer' }}><Check size={14} /></button>
+                        <button type="button" onClick={() => setInsertingForSubId(null)} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', padding: '0.25rem 0.5rem', cursor: 'pointer' }}><X size={14} /></button>
+                      </li>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </ul>
+          </div>
+
           <div style={{ marginTop: '1rem', position: 'relative' }}>
             <button
               type="button"
@@ -165,7 +360,7 @@ export const TaskCard = ({
                   border: '1px solid #d1d5db',
                   borderRadius: '6px',
                   boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                  zIndex: 10,
+                  zIndex: 30,
                   minWidth: '160px',
                   padding: '0.25rem 0'
                 }}

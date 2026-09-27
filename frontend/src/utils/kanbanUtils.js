@@ -1,4 +1,18 @@
 /**
+ * Formata strings de data (YYYY-MM-DD ou ISO) para o padrão brasileiro DD/MM/YYYY
+ */
+export const formatDateBR = (dateString) => {
+  if (!dateString) return '';
+  const cleanDate = dateString.split('T')[0];
+  const parts = cleanDate.split('-');
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+  }
+  return dateString;
+};
+
+/**
  * RF-10: Geração Automática do Título
  * Formato: {Nome do Fluxo} · {Nome do Contato} ou "Tarefa" caso sem fluxo.
  */
@@ -53,32 +67,6 @@ export const INITIAL_TASKS = [
       { id: 's2', texto: 'Preparar orçamento', tipo: 'livre', concluida: true },
       { id: 's3', texto: 'Enviar orçamento', tipo: 'livre', concluida: false },
       { id: 's4', texto: 'Resultado [Concluída | Cancelada]', tipo: 'resultado', concluida: false }
-    ]
-  },
-  {
-    id: '3',
-    fluxo_nome: null,
-    contato_nome: 'Maria Oliveira',
-    estado: 'em_andamento',
-    data_prevista: '2026-09-26',
-    criado_em: '2026-09-19T14:15:00Z',
-    observacoes: 'Aguardando aprovação do orçamento de caixa padrão CPFL.',
-    responsavel_nome: 'Ana Subgerente',
-    subtarefas: [
-      { id: 's5', texto: 'Resultado [Concluída | Cancelada]', tipo: 'resultado', concluida: false }
-    ]
-  },
-  {
-    id: '4',
-    fluxo_nome: 'Atendimento Comercial',
-    contato_nome: 'Construtora Vale',
-    estado: 'concluido',
-    data_prevista: '2026-09-25',
-    criado_em: '2026-09-18T10:00:00Z',
-    observacoes: 'Venda faturada e entregue no canteiro de obras.',
-    responsavel_nome: 'Carlos Vendedor',
-    subtarefas: [
-      { id: 's6', texto: 'Resultado [Concluída | Cancelada]', tipo: 'resultado', concluida: true }
     ]
   }
 ];

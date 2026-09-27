@@ -1,19 +1,41 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { KanbanBoard } from '../components/KanbanBoard';
-import { LogOut, Layout, User, Shield, Clock } from 'lucide-react';
+import { FluxoManagerModal } from '../components/FluxoManagerModal';
+import { LogOut, Layout, Clock, Settings } from 'lucide-react';
 
 export const DashboardPage = () => {
   const { user, limiares, logout } = useAuth();
+  const [isFluxoModalOpen, setIsFluxoModalOpen] = useState(false);
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f3f4f6' }}>
       <header style={{ backgroundColor: '#1e293b', color: '#ffffff', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Layout size={24} />
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>EletroKanban (v0.2.0)</h1>
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>EletroKanban (v0.3.0)</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {user?.papel === 'administrador' && (
+            <button
+              onClick={() => setIsFluxoModalOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                backgroundColor: '#3b82f6',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.45rem 0.75rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: '500',
+                fontSize: '0.8rem'
+              }}
+            >
+              <Settings size={15} /> Gerenciar Fluxos
+            </button>
+          )}
           <span style={{ fontSize: '0.875rem', color: '#cbd5e1' }}>
             {user?.username} ({user?.papel})
           </span>
@@ -39,7 +61,6 @@ export const DashboardPage = () => {
       </header>
 
       <main style={{ padding: '1.5rem 1rem', maxWidth: '1400px', margin: '0 auto' }}>
-        {/* Banner com Indicadores */}
         <div style={{ background: '#ffffff', padding: '1rem 1.25rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h2 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#111827', margin: 0 }}>
@@ -56,9 +77,15 @@ export const DashboardPage = () => {
           </div>
         </div>
 
-        {/* Quadro Kanban */}
         <KanbanBoard />
       </main>
+
+      {isFluxoModalOpen && (
+        <FluxoManagerModal
+          onClose={() => setIsFluxoModalOpen(false)}
+          onFluxosUpdated={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 };

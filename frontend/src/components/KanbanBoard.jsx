@@ -1,27 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { KanbanColumn } from './KanbanColumn';
-import { INITIAL_TASKS } from '../utils/kanbanUtils';
+import { TaskModal } from './TaskModal';
+import { INITIAL_TASKS, sortTasksChronologically } from '../utils/kanbanUtils';
+import * as kanbanApi from '../api/kanbanApi';
+import { Plus } from 'lucide-react';
 
 const COLLECTIONS = [
   { id: 'pendencias', title: 'Pendências', color: '#6b7280' },
-  { id: 'a_fazer', title: 'A fazer', color: '#3b82f6' },
-  { id: 'em_andamento', title: 'Em andamento', color: '#f59e0b' },
-  { id: 'concluido', title: 'Concluído', color: '#10b981' }
+  { id: 'a_fazer', title: 'A fazer', color: '#f59e0b' },
+  { id: 'em_andamento', title: 'Em andamento', color: '#3b82f6' },
+  { id: 'concluido', title: 'Concluído', color: '#10b981' },
 ];
 
 export const KanbanBoard = () => {
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
-  
-  // RF-11: Persistência no LocalStorage
+  const [tasks, setTasks] = useState([]);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [activeCollection, setActiveCollection] = useState(() => {
     return localStorage.getItem('eletrokanban_active_collection') || 'pendencias';
   });
-
   const [expandedTaskId, setExpandedTaskId] = useState(() => {
     return localStorage.getItem('eletrokanban_expanded_task') || null;
   });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [taskToEdit, setTaskToEdit] = useState(null);
 
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const fetchTasks = async () => {
+    try {
+      const response = await kanbanApi.getTarefas();
+      setTasks(sortTasksChronologically(response.data));
+    } catch (err) {
+      setTasks(sortTasksChronologically(INITIAL_TASKS));
+    }
+  };
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -41,32 +55,183 @@ export const KanbanBoard = () => {
     }
   }, [expandedTaskId]);
 
-  // RF-09: Seleção Exclusiva de Cartões
-  const handleToggleExpandTask = (taskId) => {
-    setExpandedTaskId((prevId) => (prevId === taskId ? null : taskId));
+  const handleToggleExpand = (taskId) => {
+    setExpandedTaskId((prevId) => (String(prevId) === String(taskId) ? null : taskId));
   };
 
-  const handleMoveTask = (taskId, targetCollectionId) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((t) => (t.id === taskId ? { ...t, estado: targetCollectionId } : t))
+  const handleOpenCreateModal = () => {
+    setTaskToEdit(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (task) => {
+    setTaskToEdit(task);
+    setIsModalOpen(true);
+  };
+
+  const handleMoveTask = async (taskId, novoEstado) => {
+    const task = tasks.find((t) => String(t.id) === String(taskId));
+    if (!task) return;
+
+    if (['a_fazer', 'em_andamento'].includes(novoEstado) && !task.data_prevista) {
+      alert("Para mover a tarefa para 'A fazer' ou 'Em andamento', defina uma Data Prevista.");
+      return;
+    }
+
+    if (novoEstado === 'concluido') {
+      const resSub = task.subtarefas?.find((s) => s.tipo === 'resultado');
+      if (resSub && !resSub.opcao_selecionada && !resSub.concluida) {
+        alert("Preencha a subtarefa de Resultado antes de concluir a tarefa.");
+        return;
+      }
+    }
+
+    const oldState = task.estado;
+    setTasks((prev) => prev.map((t) => (String(t.id) === String(taskId) ? { ...t, estado: novoEstado } : t)));
+
+    try {
+      await kanbanApi.updateTask(taskId, { estado: novoEstado });
+    } catch (err) {
+      setTasks((prev) => prev.map((t) => (String(t.id) === String(taskId) ? { ...t, estado: oldState } : t)));
+      const detail = err.response?.data?.detail || "Erro ao atualizar a coleção no servidor.";
+      alert(detail);
+    }
+  };
+
+  const handleToggleSubtarefa = async (taskId, subId, currentConcluida) => {
+    const newConcluida = !currentConcluida;
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (String(t.id) !== String(taskId)) return t;
+        return {
+          ...t,
+          subtarefas: t.subtarefas.map((s) => (String(s.id) === String(subId) ? { ...s, concluida: newConcluida } : s))
+        };
+      })
     );
+
+    try {
+      await kanbanApi.updateSubtarefa(subId, { concluida: newConcluida });
+    } catch (err) {
+      fetchTasks();
+    }
+  };
+
+  const handleUpdateSubtarefaOption = async (taskId, subId, optionValue) => {
+    const isDone = optionValue === 'Concluída';
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (String(t.id) !== String(taskId)) return t;
+        return {
+          ...t,
+          subtarefas: t.subtarefas.map((s) =>
+            String(s.id) === String(subId) ? { ...s, opcao_selecionada: optionValue, concluida: isDone } : s
+          )
+        };
+      })
+    );
+
+    try {
+      await kanbanApi.updateSubtarefa(subId, { opcao_selecionada: optionValue, concluida: isDone });
+    } catch (err) {
+      fetchTasks();
+    }
+  };
+
+  const handleAddSubtarefa = async (taskId, text, targetSubId, position) => {
+    const task = tasks.find((t) => String(t.id) === String(taskId));
+    if (!task) return;
+
+    const currentSubs = task.subtarefas || [];
+    let insertIndex = currentSubs.length;
+
+    if (targetSubId) {
+      const idx = currentSubs.findIndex((s) => String(s.id) === String(targetSubId));
+      if (idx !== -1) {
+        insertIndex = position === 'above' ? idx : idx + 1;
+      }
+    }
+
+    try {
+      await kanbanApi.createSubtarefa({
+        tarefa: parseInt(taskId, 10),
+        texto: text,
+        tipo: 'livre',
+        ordem: insertIndex + 1,
+        concluida: false
+      });
+      fetchTasks();
+    } catch (err) {
+      const detail = err.response?.data?.detail || "Erro ao criar subtarefa.";
+      alert(detail);
+    }
+  };
+
+  const handleDeleteSubtarefa = async (taskId, subId) => {
+    try {
+      await kanbanApi.deleteSubtarefa(subId);
+      fetchTasks();
+    } catch (err) {
+      const detail = err.response?.data?.detail || "Erro ao excluir subtarefa.";
+      alert(detail);
+    }
+  };
+
+  const handleReorderSubtarefa = async (taskId, subId, direction) => {
+    const task = tasks.find((t) => String(t.id) === String(taskId));
+    if (!task || !task.subtarefas) return;
+
+    const subs = [...task.subtarefas];
+    const index = subs.findIndex((s) => String(s.id) === String(subId));
+    if (index === -1) return;
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= subs.length) return;
+
+    const temp = subs[index];
+    subs[index] = subs[targetIndex];
+    subs[targetIndex] = temp;
+
+    const updatedSubs = subs.map((s, i) => ({ ...s, ordem: i + 1 }));
+
+    setTasks((prev) =>
+      prev.map((t) => (String(t.id) === String(taskId) ? { ...t, subtarefas: updatedSubs } : t))
+    );
+
+    try {
+      await Promise.all(
+        updatedSubs.map((s) => kanbanApi.updateSubtarefa(s.id, { ordem: s.ordem }))
+      );
+    } catch (err) {
+      fetchTasks();
+    }
   };
 
   return (
-    <div style={{ width: '100%' }}>
-      {/* Visualização Adaptável para Dispositivos Móveis (RF-06, RNF-02) */}
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+        <button
+          onClick={handleOpenCreateModal}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            backgroundColor: '#2563eb',
+            color: '#ffffff',
+            border: 'none',
+            padding: '0.6rem 1.2rem',
+            borderRadius: '6px',
+            fontWeight: '600',
+            cursor: 'pointer'
+          }}
+        >
+          <Plus size={18} /> Nova Tarefa
+        </button>
+      </div>
+
       {isMobile ? (
         <div>
-          {/* Seletor de Coleção Ativa em Faixas/Abas */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '0.25rem',
-            marginBottom: '1rem',
-            backgroundColor: '#e5e7eb',
-            padding: '0.25rem',
-            borderRadius: '8px'
-          }}>
+          <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem', overflowX: 'auto' }}>
             {COLLECTIONS.map((col) => {
               const count = tasks.filter((t) => t.estado === col.id).length;
               const isActive = activeCollection === col.id;
@@ -75,71 +240,69 @@ export const KanbanBoard = () => {
                   key={col.id}
                   onClick={() => setActiveCollection(col.id)}
                   style={{
-                    padding: '0.5rem 0.25rem',
-                    backgroundColor: isActive ? '#ffffff' : 'transparent',
-                    border: 'none',
+                    flex: 1,
+                    padding: '0.6rem 0.25rem',
                     borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: isActive ? 'bold' : 'normal',
-                    color: isActive ? '#111827' : '#4b5563',
-                    cursor: 'pointer',
-                    boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '0.15rem'
+                    border: 'none',
+                    backgroundColor: isActive ? col.color : '#e5e7eb',
+                    color: isActive ? '#ffffff' : '#374151',
+                    fontWeight: 'bold',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer'
                   }}
                 >
-                  <span style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: col.color
-                  }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
-                    {col.title}
-                  </span>
-                  <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>({count})</span>
+                  {col.title} ({count})
                 </button>
               );
             })}
           </div>
 
-          {/* Exibição Única da Coleção Selecionada no Mobile */}
-          <div>
-            {COLLECTIONS.filter((col) => col.id === activeCollection).map((col) => (
-              <KanbanColumn
-                key={col.id}
-                collection={col}
-                tasks={tasks.filter((t) => t.estado === col.id)}
-                expandedTaskId={expandedTaskId}
-                onToggleExpandTask={handleToggleExpandTask}
-                onMoveTask={handleMoveTask}
-                collections={COLLECTIONS}
-              />
-            ))}
-          </div>
+          <KanbanColumn
+            collection={COLLECTIONS.find((c) => c.id === activeCollection)}
+            tasks={tasks.filter((t) => t.estado === activeCollection)}
+            expandedTaskId={expandedTaskId}
+            onToggleExpand={handleToggleExpand}
+            onMoveTask={handleMoveTask}
+            onToggleSubtarefa={handleToggleSubtarefa}
+            onUpdateSubtarefaOption={handleUpdateSubtarefaOption}
+            onAddSubtarefa={handleAddSubtarefa}
+            onDeleteSubtarefa={handleDeleteSubtarefa}
+            onReorderSubtarefa={handleReorderSubtarefa}
+            onEditTask={handleOpenEditModal}
+            collections={COLLECTIONS}
+          />
         </div>
       ) : (
-        /* Visualização Ampla para Desktop — 4 Colunas Lado a Lado (RF-06) */
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '1rem',
-          alignItems: 'start'
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', alignItems: 'start' }}>
           {COLLECTIONS.map((col) => (
             <KanbanColumn
               key={col.id}
               collection={col}
               tasks={tasks.filter((t) => t.estado === col.id)}
               expandedTaskId={expandedTaskId}
-              onToggleExpandTask={handleToggleExpandTask}
+              onToggleExpand={handleToggleExpand}
               onMoveTask={handleMoveTask}
+              onToggleSubtarefa={handleToggleSubtarefa}
+              onUpdateSubtarefaOption={handleUpdateSubtarefaOption}
+              onAddSubtarefa={handleAddSubtarefa}
+              onDeleteSubtarefa={handleDeleteSubtarefa}
+              onReorderSubtarefa={handleReorderSubtarefa}
+              onEditTask={handleOpenEditModal}
               collections={COLLECTIONS}
             />
           ))}
         </div>
+      )}
+
+      {isModalOpen && (
+        <TaskModal
+          task={taskToEdit}
+          onClose={() => {
+            setIsModalOpen(false);
+            setTaskToEdit(null);
+          }}
+          onTaskSaved={fetchTasks}
+        />
       )}
     </div>
   );
