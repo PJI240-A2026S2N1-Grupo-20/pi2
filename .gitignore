@@ -19,3 +19,7 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Arquivos de mídia e uploads do Django
+backend/media/
+media/
