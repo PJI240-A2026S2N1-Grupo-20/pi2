@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { KanbanColumn } from './KanbanColumn';
 import { TaskModal } from './TaskModal';
-import { INITIAL_TASKS, sortTasksChronologically } from '../utils/kanbanUtils';
+import { sortTasksChronologically } from '../utils/kanbanUtils';
 import * as kanbanApi from '../api/kanbanApi';
 import { Plus } from 'lucide-react';
 
@@ -15,6 +15,8 @@ const COLLECTIONS = [
 export const KanbanBoard = () => {
   const [tasks, setTasks] = useState([]);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [feedbackMsg, setFeedbackMsg] = useState('');
+  
   const [activeCollection, setActiveCollection] = useState(() => {
     return localStorage.getItem('eletrokanban_active_collection') || 'pendencias';
   });
@@ -24,12 +26,18 @@ export const KanbanBoard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState(null);
 
+  const showFeedback = (msg) => {
+    setFeedbackMsg(msg);
+    setTimeout(() => setFeedbackMsg(''), 4500);
+  };
+
   const fetchTasks = async () => {
     try {
       const response = await kanbanApi.getTarefas();
       setTasks(sortTasksChronologically(response.data));
     } catch (err) {
-      setTasks(sortTasksChronologically(INITIAL_TASKS));
+      showFeedback("Erro de conexão: Não foi possível carregar as tarefas do servidor.");
+      setTasks([]);
     }
   };
 
@@ -74,14 +82,14 @@ export const KanbanBoard = () => {
     if (!task) return;
 
     if (['a_fazer', 'em_andamento'].includes(novoEstado) && !task.data_prevista) {
-      alert("Para mover a tarefa para 'A fazer' ou 'Em andamento', defina uma Data Prevista.");
+      showFeedback("Ação negada: Para mover a tarefa para 'A fazer' ou 'Em andamento', defina uma Data Prevista.");
       return;
     }
 
     if (novoEstado === 'concluido') {
       const resSub = task.subtarefas?.find((s) => s.tipo === 'resultado');
       if (resSub && !resSub.opcao_selecionada && !resSub.concluida) {
-        alert("Preencha a subtarefa de Resultado antes de concluir a tarefa.");
+        showFeedback("Ação negada: Preencha a subtarefa de Resultado antes de concluir a negociação.");
         return;
       }
     }
@@ -93,8 +101,8 @@ export const KanbanBoard = () => {
       await kanbanApi.updateTask(taskId, { estado: novoEstado });
     } catch (err) {
       setTasks((prev) => prev.map((t) => (String(t.id) === String(taskId) ? { ...t, estado: oldState } : t)));
-      const detail = err.response?.data?.detail || "Erro ao atualizar a coleção no servidor.";
-      alert(detail);
+      const detail = err.response?.data?.detail || "Erro no servidor ao atualizar a coleção.";
+      showFeedback(detail);
     }
   };
 
@@ -163,7 +171,7 @@ export const KanbanBoard = () => {
       fetchTasks();
     } catch (err) {
       const detail = err.response?.data?.detail || "Erro ao criar subtarefa.";
-      alert(detail);
+      showFeedback(detail);
     }
   };
 
@@ -173,7 +181,7 @@ export const KanbanBoard = () => {
       fetchTasks();
     } catch (err) {
       const detail = err.response?.data?.detail || "Erro ao excluir subtarefa.";
-      alert(detail);
+      showFeedback(detail);
     }
   };
 
@@ -303,6 +311,31 @@ export const KanbanBoard = () => {
           }}
           onTaskSaved={fetchTasks}
         />
+      )}
+
+      {/* Componente visual de notificação acessível substituindo o window.alert */}
+      {feedbackMsg && (
+        <div
+          aria-live="assertive"
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#1f2937',
+            color: '#ffffff',
+            padding: '0.75rem 1.25rem',
+            borderRadius: '6px',
+            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+            zIndex: 9999,
+            fontWeight: '500',
+            fontSize: '0.9rem',
+            textAlign: 'center',
+            maxWidth: '90vw'
+          }}
+        >
+          {feedbackMsg}
+        </div>
       )}
     </div>
   );

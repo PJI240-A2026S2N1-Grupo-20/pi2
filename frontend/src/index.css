@@ -5,7 +5,9 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
-body {
+html, body {
+  width: 100%;
+  overflow-x: hidden; /* Impede completamente o deslocamento lateral indesejado */
   background-color: #f3f4f6;
   color: #1f2937;
   line-height: 1.5;

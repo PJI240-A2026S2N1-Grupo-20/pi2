@@ -38,7 +38,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
 
-      - name: Rodar Testes do Backend
+      - name: Verificar migrações pendentes
+        run: |
+          python backend/manage.py makemigrations --check --dry-run --settings=config.settings
+
+      - name: Rodar Testes do Backend (todos os apps)
         env:
           DB_HOST: localhost
           DB_PORT: 5432
@@ -46,9 +50,9 @@ jobs:
           DB_USER: eletrokanban
           DB_PASSWORD: eletrokanban
         run: |
-          python backend/manage.py test accounts --settings=config.settings
+          python backend/manage.py test accounts kanban --settings=config.settings
 
-  frontend-build:
+  frontend-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -59,8 +63,17 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Build do Frontend
+      - name: Instalar Dependências do Frontend
         run: |
           cd frontend
           npm ci || npm install
+
+      - name: Rodar Testes do Frontend (Vitest)
+        run: |
+          cd frontend
+          npx vitest run --passWithNoTests
+
+      - name: Build do Frontend
+        run: |
+          cd frontend
           npm run build

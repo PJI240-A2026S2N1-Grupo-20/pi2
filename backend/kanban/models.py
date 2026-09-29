@@ -18,6 +18,9 @@ class Contato(models.Model):
 
     def __str__(self):
         return self.nome or self.email or self.telefone or "Contato Sem Nome"
+    @property
+    def nome_exibicao(self):
+        return str(self)
 
 
 class Fluxo(models.Model):

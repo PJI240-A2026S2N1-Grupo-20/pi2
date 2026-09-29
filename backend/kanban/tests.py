@@ -48,7 +48,7 @@ class KanbanBackendTestCase(TestCase):
         sub_fluxo = tarefa.subtarefas.filter(tipo='fluxo').first()
         self.assertIsNotNone(sub_fluxo)
         
-        # Alterar a subtarefa não altera o modelo PassoFluxo original (RF-21, RF-23)
+        # Alterar a subtarefa não altera o modelo PassoFluxo original (RF-22)
         sub_fluxo.texto = "Texto alterado na tarefa"
         sub_fluxo.save()
         
@@ -73,3 +73,11 @@ class KanbanBackendTestCase(TestCase):
         anexo_excedente = Anexo(tarefa=tarefa, arquivo=pdf_valido, nome="doc_21.pdf", tamanho=100)
         with self.assertRaises(ValidationError):
             anexo_excedente.full_clean()
+    def test_nome_exibicao_contato_no_serializer_tarefa(self):
+        tarefa = Tarefa.objects.create(contato=self.contato, criado_por=self.user)
+        
+        # Importado localmente para evitar dependência circular caso exista
+        from .serializers import TarefaSerializer
+        
+        serializer = TarefaSerializer(tarefa)
+        self.assertEqual(serializer.data['contato_nome'], 'Cliente Teste')

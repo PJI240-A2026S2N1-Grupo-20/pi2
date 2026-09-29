@@ -74,7 +74,6 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
       };
 
       if (task) {
-        // Se a tarefa pertencia a 'pendencias' e agora recebeu uma data_prevista, move para 'a_fazer' (RF-13)
         if (task.estado === 'pendencias' && dataPrevista) {
           payload.estado = 'a_fazer';
         }
@@ -100,18 +99,17 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
       bottom: 0,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: 'flex-start', // Previne corte quando o teclado sobe
       zIndex: 1000,
-      padding: '1rem'
+      padding: '1rem',
+      overflowY: 'auto' // Permite rolar a tela se o modal for mais alto que o celular
     }}>
       <div style={{
         backgroundColor: '#ffffff',
         borderRadius: '8px',
         maxWidth: '500px',
         width: '100%',
-        maxHeight: '90vh',
-        overflowY: 'auto',
+        margin: 'auto', // Centraliza perfeitamente respeitando o teclado móvel
         boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
         padding: '1.5rem'
       }}>
@@ -141,7 +139,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
               <select
                 value={selectedFluxo}
                 onChange={(e) => setSelectedFluxo(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '16px' }}
               >
                 <option value="">[Nenhum / Tarefa Livre]</option>
                 {fluxos.map((f) => (
@@ -171,7 +169,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                     placeholder="Digite Nome, E-mail ou Telefone *"
                     value={newContactInput}
                     onChange={(e) => setNewContactInput(e.target.value)}
-                    style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.85rem', marginBottom: '0.5rem' }}
+                    style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '16px', marginBottom: '0.5rem' }}
                   />
                   {contactError && <div style={{ color: '#dc2626', fontSize: '0.75rem', marginBottom: '0.35rem' }}>{contactError}</div>}
                   <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
@@ -195,7 +193,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 <select
                   value={selectedContato}
                   onChange={(e) => setSelectedContato(e.target.value)}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '16px' }}
                 >
                   <option value="">[Sem Contato Definido]</option>
                   {contatos.map((c) => {
@@ -214,7 +212,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 type="date"
                 value={dataPrevista}
                 onChange={(e) => setDataPrevista(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '16px' }}
               />
             </div>
 
@@ -227,7 +225,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 placeholder="Detalhes sobre a negociação..."
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.875rem' }}
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '16px' }}
               />
             </div>
 

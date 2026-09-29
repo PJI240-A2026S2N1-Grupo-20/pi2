@@ -10,6 +10,7 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
   const [novoPassoTexto, setNovoPassoTexto] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   const loadFluxos = async () => {
     try {
@@ -22,6 +23,12 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
 
   useEffect(() => {
     loadFluxos();
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const handleStartNew = () => {
@@ -106,8 +113,8 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
         {error && <div style={{ padding: '0.75rem', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '4px', marginBottom: '1rem', fontSize: '0.85rem' }}>{error}</div>}
         {success && <div style={{ padding: '0.75rem', backgroundColor: '#d1fae5', color: '#065f46', borderRadius: '4px', marginBottom: '1rem', fontSize: '0.85rem' }}>{success}</div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '1.5rem' }}>
-          <div style={{ borderRight: '1px solid #e5e7eb', paddingRight: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1.5fr', gap: '1.5rem' }}>
+          <div style={{ borderRight: isMobile ? 'none' : '1px solid #e5e7eb', borderBottom: isMobile ? '1px solid #e5e7eb' : 'none', paddingRight: isMobile ? 0 : '1rem', paddingBottom: isMobile ? '1rem' : 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#374151' }}>Modelos Existentes</span>
             </div>
@@ -160,7 +167,7 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
                     cursor: 'pointer'
                   }}
                 >
-                  <Plus size={14} /> Sair da edição / Criar Novo
+                  <Plus size={14} /> Sair / Novo
                 </button>
               ) : (
                 (nome || passos.length > 0) && (
@@ -180,7 +187,7 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
                       cursor: 'pointer'
                     }}
                   >
-                    <RotateCcw size={12} /> Limpar campos
+                    <RotateCcw size={12} /> Limpar
                   </button>
                 )
               )}
@@ -217,7 +224,7 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
               <button type="button" onClick={onClose} style={{ padding: '0.4rem 0.8rem', border: '1px solid #d1d5db', borderRadius: '4px', background: '#fff', fontSize: '0.8rem', cursor: 'pointer' }}>Cancelar</button>
               <button type="submit" style={{ padding: '0.4rem 0.8rem', border: 'none', borderRadius: '4px', background: '#2563eb', color: '#fff', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer' }}>
-                {editingFluxoId ? 'Atualizar Fluxo' : 'Salvar Novo Fluxo'}
+                {editingFluxoId ? 'Atualizar Fluxo' : 'Salvar Fluxo'}
               </button>
             </div>
           </form>

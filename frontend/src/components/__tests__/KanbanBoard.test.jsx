@@ -7,7 +7,7 @@ import { vi } from 'vitest';
 
 vi.mock('../../api/kanbanApi');
 
-describe('Quadro Kanban - Testes da Etapa 3 (v0.3.0)', () => {
+describe('Quadro Kanban - Testes da Etapa 3 (v0.4.0)', () => {
   beforeEach(() => {
     localStorage.clear();
     global.innerWidth = 1024;
