@@ -22,6 +22,7 @@ export const TaskCard = ({
   const [newSubText, setNewSubText] = useState('');
 
   const moveMenuRef = useRef(null);
+  const moveButtonRef = useRef(null);
   const title = getTaskTitle(task);
 
   useEffect(() => {
@@ -40,6 +41,46 @@ export const TaskCard = ({
       return () => clearTimeout(timer);
     }
   }, [showMoveMenu]);
+
+  // Fecha menus com Escape mesmo quando o foco está fora do container
+  useEffect(() => {
+    if (!showMoveMenu && activeMenuSubId === null) return;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (showMoveMenu) {
+        setShowMoveMenu(false);
+        moveButtonRef.current?.focus();
+      }
+      if (activeMenuSubId !== null) {
+        setActiveMenuSubId(null);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showMoveMenu, activeMenuSubId]);
+
+  const handleMoveMenuKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      setShowMoveMenu(false);
+      moveButtonRef.current?.focus();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!moveMenuRef.current) return;
+      const buttons = Array.from(moveMenuRef.current.querySelectorAll('button'));
+      if (buttons.length === 0) return;
+      e.preventDefault();
+      const currentIdx = buttons.indexOf(document.activeElement);
+      let nextIdx;
+      if (e.key === 'ArrowDown') {
+        nextIdx = currentIdx < buttons.length - 1 ? currentIdx + 1 : 0;
+      } else {
+        nextIdx = currentIdx > 0 ? currentIdx - 1 : buttons.length - 1;
+      }
+      buttons[nextIdx]?.focus();
+    }
+  };
 
   const handleDragStart = (e) => {
     e.dataTransfer.setData('text/plain', task.id);
@@ -191,7 +232,7 @@ export const TaskCard = ({
                           onChange={() => onToggleSubtarefa(task.id, sub.id, sub.concluida)}
                           style={{ cursor: 'pointer' }}
                         />
-                        
+
                         {sub.tipo === 'resultado' ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
                             <span style={{ fontWeight: '500', color: '#1f2937' }}>Resultado:</span>
@@ -325,6 +366,7 @@ export const TaskCard = ({
           <div style={{ marginTop: '1rem', position: 'relative' }}>
             <button
               type="button"
+              ref={moveButtonRef}
               onClick={(e) => {
                 e.stopPropagation();
                 setShowMoveMenu(!showMoveMenu);
@@ -351,6 +393,8 @@ export const TaskCard = ({
             {showMoveMenu && (
               <div
                 ref={moveMenuRef}
+                role="menu"
+                onKeyDown={handleMoveMenuKeyDown}
                 style={{
                   position: 'absolute',
                   top: '100%',
@@ -371,10 +415,12 @@ export const TaskCard = ({
                     <button
                       key={col.id}
                       type="button"
+                      role="menuitem"
                       onClick={(e) => {
                         e.stopPropagation();
                         onMoveTask(task.id, col.id);
                         setShowMoveMenu(false);
+                        moveButtonRef.current?.focus();
                       }}
                       style={{
                         display: 'block',
@@ -387,8 +433,8 @@ export const TaskCard = ({
                         color: '#1f2937',
                         cursor: 'pointer'
                       }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = '#f3f4f6'}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f3f4f6'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                       {col.title}
                     </button>
