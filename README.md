@@ -1,4 +1,4 @@
-# EletroKanban — Sistema de Gestão de Negociações (v0.4.5)
+# EletroKanban — Sistema de Gestão de Negociações (v0.4.7)
 
 Aplicação web destinada ao gerenciamento de negociações, vendas, orçamentos e atividades do setor comercial com abordagem para dispositivos móveis, desenvolvida para o Projeto Integrador Univesp.
 7

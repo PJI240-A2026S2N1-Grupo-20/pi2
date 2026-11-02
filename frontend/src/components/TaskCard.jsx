@@ -42,7 +42,6 @@ export const TaskCard = ({
     }
   }, [showMoveMenu]);
 
-  // Fecha menus com Escape mesmo quando o foco está fora do container
   useEffect(() => {
     if (!showMoveMenu && activeMenuSubId === null) return;
     const onKey = (e) => {
@@ -225,15 +224,16 @@ export const TaskCard = ({
                     )}
 
                     <li style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px solid #f3f4f6', position: 'relative' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, marginRight: '0.5rem' }}>
-                        <input
-                          type="checkbox"
-                          checked={sub.concluida || sub.opcao_selecionada === 'Concluída'}
-                          onChange={() => onToggleSubtarefa(task.id, sub.id, sub.concluida)}
-                          style={{ cursor: 'pointer' }}
-                        />
-
-                        {sub.tipo === 'resultado' ? (
+                      {sub.tipo === 'resultado' ? (
+                        // Tipo resultado: mantém <div> — o <select> é o alvo de clique,
+                        // então envolvê-lo em <label> dispararia o checkbox indevidamente.
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, marginRight: '0.5rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={sub.concluida || sub.opcao_selecionada === 'Concluída'}
+                            onChange={() => onToggleSubtarefa(task.id, sub.id, sub.concluida)}
+                            style={{ cursor: 'pointer' }}
+                          />
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
                             <span style={{ fontWeight: '500', color: '#1f2937' }}>Resultado:</span>
                             <select
@@ -246,12 +246,37 @@ export const TaskCard = ({
                               <option value="Cancelada">Cancelada</option>
                             </select>
                           </div>
-                        ) : (
-                          <span style={{ textDecoration: sub.concluida ? 'line-through' : 'none', color: sub.concluida ? '#9ca3af' : '#374151', fontSize: '0.825rem' }}>
+                        </div>
+                      ) : (
+                        // Tipo livre/fluxo: <label> nativo associa clique no texto ao checkbox.
+                        // Cobre clique do mouse, toque em mobile e leitores de tela (RNF-01).
+                        <label
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            flex: 1,
+                            marginRight: '0.5rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={sub.concluida || sub.opcao_selecionada === 'Concluída'}
+                            onChange={() => onToggleSubtarefa(task.id, sub.id, sub.concluida)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <span
+                            style={{
+                              textDecoration: sub.concluida ? 'line-through' : 'none',
+                              color: sub.concluida ? '#9ca3af' : '#374151',
+                              fontSize: '0.825rem'
+                            }}
+                          >
                             {sub.texto}
                           </span>
-                        )}
-                      </div>
+                        </label>
+                      )}
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', position: 'relative' }}>
                         <button

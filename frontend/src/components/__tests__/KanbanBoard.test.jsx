@@ -25,6 +25,7 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
           observacoes: 'Cliente solicitou cotação de cabos',
           responsavel_nome: 'Carlos Vendedor',
           subtarefas: [
+            { id: 's0', texto: 'Preparar orçamento', tipo: 'livre', concluida: false, opcao_selecionada: null },
             { id: 's1', texto: 'Resultado [Concluída | Cancelada]', tipo: 'resultado', concluida: false, opcao_selecionada: null }
           ]
         }
@@ -53,13 +54,11 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
       expect(screen.getByText('Orçamento · João da Silva')).toBeInTheDocument();
     });
 
-    const card = screen.getByText('Orçamento · João da Silva');
-    fireEvent.click(card);
+    fireEvent.click(screen.getByText('Orçamento · João da Silva'));
 
     const moveButton = screen.getByRole('button', { name: /Mover para\.\.\./i });
     fireEvent.click(moveButton);
 
-    // RF-12 (v0.4.5): itens do menu usam role="menuitem" para acessibilidade
     const targetOption = screen.getByRole('menuitem', { name: 'A fazer' });
     fireEvent.click(targetOption);
 
@@ -87,5 +86,42 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
     await waitFor(() => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     });
+  });
+
+  test('RF-16: clicar no texto da subtarefa alterna o checkbox (label nativo)', async () => {
+    kanbanApi.updateSubtarefa.mockResolvedValue({ data: {} });
+
+    render(<KanbanBoard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Orçamento · João da Silva')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Orçamento · João da Silva'));
+
+    const textoSub = await screen.findByText('Preparar orçamento');
+    const label = textoSub.closest('label');
+    expect(label).not.toBeNull();
+
+    // Clicar no label (que envolve o texto) deve disparar o checkbox
+    fireEvent.click(label);
+
+    await waitFor(() => {
+      expect(kanbanApi.updateSubtarefa).toHaveBeenCalledWith('s0', { concluida: true });
+    });
+  });
+
+  test('RF-16: subtarefa de resultado não é envolvida em <label> (evita clique acidental no checkbox)', async () => {
+    render(<KanbanBoard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Orçamento · João da Silva')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Orçamento · João da Silva'));
+
+    const selectResultado = await screen.findByRole('combobox');
+    // O select fica fora de um <label>, então o clique nele não alterna o checkbox
+    expect(selectResultado.closest('label')).toBeNull();
   });
 });
