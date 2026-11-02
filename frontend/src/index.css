@@ -19,3 +19,33 @@ html, body {
   margin: 0 auto;
   padding: 1rem;
 }
+
+/* ---------- Ferramentas de Acessibilidade (RF-33) ---------- */
+
+/* Escala de Cinza */
+html.a11y-grayscale body {
+  filter: grayscale(100%);
+}
+
+/* Alto Contraste */
+html.a11y-high-contrast body {
+  filter: contrast(150%) saturate(140%);
+}
+
+/* Contraste Negativo */
+html.a11y-negative-contrast body {
+  filter: invert(100%) hue-rotate(180deg);
+}
+
+/* Luz de Cor de Fundo — bege suave, visível na área de conteúdo (main) */
+html.a11y-soft-bg body {
+  background-color: #fff8dc !important;
+}
+
+/* Fonte Legível — alternativa gratuita com fallback universal */
+html.a11y-readable-font body,
+html.a11y-readable-font body * {
+  font-family: 'Atkinson Hyperlegible', Verdana, Tahoma, sans-serif;
+  letter-spacing: 0.02em;
+  line-height: 1.7;
+}

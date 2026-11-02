@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { KanbanBoard } from '../components/KanbanBoard';
 import { FluxoManagerModal } from '../components/FluxoManagerModal';
+import { AccessibilityMenu } from '../components/AccessibilityMenu';
 import { LogOut, Layout, Clock, Settings } from 'lucide-react';
 
 export const DashboardPage = () => {
@@ -16,27 +17,27 @@ export const DashboardPage = () => {
   }, []);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f3f4f6', width: '100%', overflowX: 'hidden' }}>
-      <header style={{ 
-        backgroundColor: '#1e293b', 
-        color: '#ffffff', 
-        padding: '0.75rem 1rem', 
-        display: 'flex', 
+    <div style={{ minHeight: '100vh', width: '100%', overflowX: 'hidden' }}>
+      <header style={{
+        backgroundColor: '#1e293b',
+        color: '#ffffff',
+        padding: '0.75rem 1rem',
+        display: 'flex',
         flexDirection: isMobile ? 'column' : 'row',
-        justifyContent: 'space-between', 
+        justifyContent: 'space-between',
         alignItems: isMobile ? 'flex-start' : 'center',
         gap: '0.75rem',
         width: '100%'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Layout size={22} />
-          <h1 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0 }}>EletroKanban (v0.4.7)</h1>
+          <h1 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0 }}>EletroKanban (v0.5.0)</h1>
         </div>
-        
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '0.75rem', 
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
           flexWrap: 'wrap',
           width: isMobile ? '100%' : 'auto',
           justifyContent: isMobile ? 'space-between' : 'flex-end'
@@ -64,6 +65,7 @@ export const DashboardPage = () => {
           <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
             {user?.username} ({user?.papel})
           </span>
+          <AccessibilityMenu />
           <button
             onClick={logout}
             style={{
