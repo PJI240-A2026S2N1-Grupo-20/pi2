@@ -59,9 +59,33 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
     const moveButton = screen.getByRole('button', { name: /Mover para\.\.\./i });
     fireEvent.click(moveButton);
 
-    const targetOption = screen.getByRole('button', { name: 'A fazer' });
+    // RF-12 (v0.4.5): itens do menu usam role="menuitem" para acessibilidade
+    const targetOption = screen.getByRole('menuitem', { name: 'A fazer' });
     fireEvent.click(targetOption);
 
     expect(kanbanApi.updateTask).toHaveBeenCalledWith('1', { estado: 'a_fazer' });
+  });
+
+  test('RF-12: menu "Mover para..." fecha com Escape', async () => {
+    render(<KanbanBoard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Orçamento · João da Silva')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Orçamento · João da Silva'));
+
+    const moveButton = screen.getByRole('button', { name: /Mover para\.\.\./i });
+    fireEvent.click(moveButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
   });
 });
