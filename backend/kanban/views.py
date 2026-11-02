@@ -4,10 +4,12 @@ from .models import Contato, Fluxo, Tarefa, Subtarefa
 from .serializers import ContatoSerializer, FluxoSerializer, TarefaSerializer, SubtarefaSerializer
 from accounts.permissions import IsAdministrador
 
+
 class ContatoViewSet(viewsets.ModelViewSet):
     queryset = Contato.objects.filter(ativo=True).order_by('nome')
     serializer_class = ContatoSerializer
     permission_classes = [permissions.IsAuthenticated]
+
 
 class FluxoViewSet(viewsets.ModelViewSet):
     queryset = Fluxo.objects.filter(ativo=True).order_by('nome')
@@ -17,6 +19,7 @@ class FluxoViewSet(viewsets.ModelViewSet):
         if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
             return [IsAdministrador()]
         return [permissions.IsAuthenticated()]
+
 
 class TarefaViewSet(viewsets.ModelViewSet):
     serializer_class = TarefaSerializer
@@ -28,9 +31,9 @@ class TarefaViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         estado = 'a_fazer' if serializer.validated_data.get('data_prevista') else 'pendencias'
         responsavel = serializer.validated_data.get('responsavel') or self.request.user
-        
+
         tarefa = serializer.save(criado_por=self.request.user, responsavel=responsavel, estado=estado)
-        
+
         if not tarefa.subtarefas.exists():
             if tarefa.fluxo:
                 ordem_count = 1
@@ -59,8 +62,21 @@ class TarefaViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        novo_estado = request.data.get('estado', instance.estado)
-        data_prevista = request.data.get('data_prevista', instance.data_prevista)
+        data = request.data
+
+        # RF-15: se a data prevista for removida, a tarefa retorna para Pendências
+        data_removida = 'data_prevista' in data and not data.get('data_prevista')
+        novo_estado = data.get('estado', instance.estado)
+
+        if data_removida and 'estado' not in data and instance.estado in ['a_fazer', 'em_andamento']:
+            novo_estado = 'pendencias'
+            if isinstance(data, dict):
+                data['estado'] = 'pendencias'
+            elif hasattr(data, '_mutable'):
+                data._mutable = True
+                data['estado'] = 'pendencias'
+
+        data_prevista = None if data_removida else data.get('data_prevista', instance.data_prevista)
 
         if novo_estado in ['a_fazer', 'em_andamento'] and not data_prevista:
             return Response(
@@ -77,6 +93,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
                 )
 
         return super().update(request, *args, **kwargs, partial=partial)
+
 
 class SubtarefaViewSet(viewsets.ModelViewSet):
     serializer_class = SubtarefaSerializer

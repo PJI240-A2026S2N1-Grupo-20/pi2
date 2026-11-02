@@ -74,8 +74,13 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
       };
 
       if (task) {
-        if (task.estado === 'pendencias' && dataPrevista) {
-          payload.estado = 'a_fazer';
+        if (dataPrevista) {
+          if (task.estado === 'pendencias') {
+            payload.estado = 'a_fazer';
+          }
+        } else if (task.data_prevista && ['a_fazer', 'em_andamento'].includes(task.estado)) {
+          // RF-15: remoção da data prevista retorna a tarefa para Pendências
+          payload.estado = 'pendencias';
         }
         await kanbanApi.updateTask(task.id, payload);
       } else {
@@ -99,17 +104,17 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
       bottom: 0,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       display: 'flex',
-      alignItems: 'flex-start', // Previne corte quando o teclado sobe
+      alignItems: 'flex-start',
       zIndex: 1000,
       padding: '1rem',
-      overflowY: 'auto' // Permite rolar a tela se o modal for mais alto que o celular
+      overflowY: 'auto'
     }}>
       <div style={{
         backgroundColor: '#ffffff',
         borderRadius: '8px',
         maxWidth: '500px',
         width: '100%',
-        margin: 'auto', // Centraliza perfeitamente respeitando o teclado móvel
+        margin: 'auto',
         boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
         padding: '1.5rem'
       }}>

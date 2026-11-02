@@ -1,8 +1,14 @@
+from datetime import date
+
 from django.test import TestCase
+from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
+from rest_framework.test import APIClient
+
 from accounts.models import Usuario
 from .models import Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa, Anexo
+
 
 class KanbanBackendTestCase(TestCase):
     def setUp(self):
@@ -47,17 +53,16 @@ class KanbanBackendTestCase(TestCase):
         )
         sub_fluxo = tarefa.subtarefas.filter(tipo='fluxo').first()
         self.assertIsNotNone(sub_fluxo)
-        
+
         # Alterar a subtarefa não altera o modelo PassoFluxo original (RF-22)
         sub_fluxo.texto = "Texto alterado na tarefa"
         sub_fluxo.save()
-        
+
         passo_original = PassoFluxo.objects.get(id=self.fluxo.passos.first().id)
         self.assertEqual(passo_original.texto, "Passo 1")
 
     def test_upload_pdf_limite_tamanho(self):
         tarefa = Tarefa.objects.create(contato=self.contato, criado_por=self.user)
-        # Arquivo fake simulando > 25MB
         grande_arquivo = SimpleUploadedFile("grande.pdf", b"0" * (25 * 1024 * 1024 + 1), content_type="application/pdf")
         anexo = Anexo(tarefa=tarefa, arquivo=grande_arquivo, nome="grande.pdf", tamanho=grande_arquivo.size)
         with self.assertRaises(ValidationError):
@@ -66,18 +71,37 @@ class KanbanBackendTestCase(TestCase):
     def test_upload_pdf_limite_quantidade(self):
         tarefa = Tarefa.objects.create(contato=self.contato, criado_por=self.user)
         pdf_valido = SimpleUploadedFile("teste.pdf", b"%PDF-1.4 test content", content_type="application/pdf")
-        
+
         for i in range(20):
             Anexo.objects.create(tarefa=tarefa, arquivo=pdf_valido, nome=f"doc_{i}.pdf", tamanho=100)
-            
+
         anexo_excedente = Anexo(tarefa=tarefa, arquivo=pdf_valido, nome="doc_21.pdf", tamanho=100)
         with self.assertRaises(ValidationError):
             anexo_excedente.full_clean()
+
     def test_nome_exibicao_contato_no_serializer_tarefa(self):
         tarefa = Tarefa.objects.create(contato=self.contato, criado_por=self.user)
-        
-        # Importado localmente para evitar dependência circular caso exista
         from .serializers import TarefaSerializer
-        
         serializer = TarefaSerializer(tarefa)
         self.assertEqual(serializer.data['contato_nome'], 'Cliente Teste')
+
+    def test_rf15_remover_data_prevista_retorna_para_pendencias(self):
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        tarefa = Tarefa.objects.create(
+            contato=self.contato,
+            data_prevista=date(2026, 10, 1),
+            criado_por=self.user
+        )
+        self.assertEqual(tarefa.estado, 'a_fazer')
+
+        url = reverse('tarefa-detail', args=[tarefa.id])
+        response = client.patch(url, {'data_prevista': None}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['estado'], 'pendencias')
+        self.assertIsNone(response.data['data_prevista'])
+
+        tarefa.refresh_from_db()
+        self.assertEqual(tarefa.estado, 'pendencias')
+        self.assertIsNone(tarefa.data_prevista)
