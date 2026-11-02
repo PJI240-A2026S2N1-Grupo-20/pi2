@@ -14,7 +14,7 @@ export const formatDateBR = (dateString) => {
 
 /**
  * RF-10: Geração Automática do Título
- * Formato: {Nome do Fluxo} · {Nome do Contato}; sem fluxo: "Tarefa · {Contato}";
+ * Formato: {Nome do Fluxo} - {Nome do Contato}; sem fluxo: "Tarefa - {Contato}";
  * sem contato: "Tarefa" (independentemente de haver fluxo).
  */
 export const getTaskTitle = (task) => {
@@ -22,7 +22,7 @@ export const getTaskTitle = (task) => {
   const contato = task.contato_nome?.trim();
 
   if (contato) {
-    return fluxo ? `${fluxo} · ${contato}` : `Tarefa · ${contato}`;
+    return fluxo ? `${fluxo} - ${contato}` : `Tarefa - ${contato}`;
   }
   return 'Tarefa';
 };

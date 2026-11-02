@@ -9,6 +9,7 @@ import {
   Lightbulb,
   Type,
   RotateCcw,
+  Check,
 } from 'lucide-react';
 
 const STORAGE_KEY = 'eletrokanban_a11y';
@@ -216,7 +217,7 @@ export const AccessibilityMenu = () => {
             style={itemStyle}
           >
             <BarChart3 size={16} /> Escala de Cinza
-            {state.grayscale && <span style={checkStyle}>✓</span>}
+            {state.grayscale && <Check size={14} style={checkStyle} />}
           </button>
 
           <button
@@ -227,7 +228,7 @@ export const AccessibilityMenu = () => {
             style={itemStyle}
           >
             <ContrastIcon size={16} /> Alto Contraste
-            {state.highContrast && <span style={checkStyle}>✓</span>}
+            {state.highContrast && <Check size={14} style={checkStyle} />}
           </button>
 
           <button
@@ -238,7 +239,7 @@ export const AccessibilityMenu = () => {
             style={itemStyle}
           >
             <Eye size={16} /> Contraste Negativo
-            {state.negativeContrast && <span style={checkStyle}>✓</span>}
+            {state.negativeContrast && <Check size={14} style={checkStyle} />}
           </button>
 
           <button
@@ -249,7 +250,7 @@ export const AccessibilityMenu = () => {
             style={itemStyle}
           >
             <Lightbulb size={16} /> Luz de Cor de Fundo
-            {state.softBackground && <span style={checkStyle}>✓</span>}
+            {state.softBackground && <Check size={14} style={checkStyle} />}
           </button>
 
           <button
@@ -260,7 +261,7 @@ export const AccessibilityMenu = () => {
             style={itemStyle}
           >
             <Type size={16} /> Fonte Legível
-            {state.readableFont && <span style={checkStyle}>✓</span>}
+            {state.readableFont && <Check size={14} style={checkStyle} />}
           </button>
 
           <div

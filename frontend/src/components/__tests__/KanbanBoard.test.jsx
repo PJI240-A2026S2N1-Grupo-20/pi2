@@ -34,8 +34,8 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
   });
 
   test('RF-10: Geração automática de título', () => {
-    expect(getTaskTitle({ fluxo_nome: 'Orçamento', contato_nome: 'João' })).toBe('Orçamento · João');
-    expect(getTaskTitle({ fluxo_nome: null, contato_nome: 'Maria' })).toBe('Tarefa · Maria');
+    expect(getTaskTitle({ fluxo_nome: 'Orçamento', contato_nome: 'João' })).toBe('Orçamento - João');
+    expect(getTaskTitle({ fluxo_nome: null, contato_nome: 'Maria' })).toBe('Tarefa - Maria');
     expect(getTaskTitle({ fluxo_nome: null, contato_nome: null })).toBe('Tarefa');
   });
 
@@ -51,10 +51,10 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
     render(<KanbanBoard />);
 
     await waitFor(() => {
-      expect(screen.getByText('Orçamento · João da Silva')).toBeInTheDocument();
+      expect(screen.getByText('Orçamento - João da Silva')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Orçamento · João da Silva'));
+    fireEvent.click(screen.getByText('Orçamento - João da Silva'));
 
     const moveButton = screen.getByRole('button', { name: /Mover para\.\.\./i });
     fireEvent.click(moveButton);
@@ -69,10 +69,10 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
     render(<KanbanBoard />);
 
     await waitFor(() => {
-      expect(screen.getByText('Orçamento · João da Silva')).toBeInTheDocument();
+      expect(screen.getByText('Orçamento - João da Silva')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Orçamento · João da Silva'));
+    fireEvent.click(screen.getByText('Orçamento - João da Silva'));
 
     const moveButton = screen.getByRole('button', { name: /Mover para\.\.\./i });
     fireEvent.click(moveButton);
@@ -94,10 +94,10 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
     render(<KanbanBoard />);
 
     await waitFor(() => {
-      expect(screen.getByText('Orçamento · João da Silva')).toBeInTheDocument();
+      expect(screen.getByText('Orçamento - João da Silva')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Orçamento · João da Silva'));
+    fireEvent.click(screen.getByText('Orçamento - João da Silva'));
 
     const textoSub = await screen.findByText('Preparar orçamento');
     const label = textoSub.closest('label');
@@ -115,10 +115,10 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
     render(<KanbanBoard />);
 
     await waitFor(() => {
-      expect(screen.getByText('Orçamento · João da Silva')).toBeInTheDocument();
+      expect(screen.getByText('Orçamento - João da Silva')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Orçamento · João da Silva'));
+    fireEvent.click(screen.getByText('Orçamento - João da Silva'));
 
     const selectResultado = await screen.findByRole('combobox');
     // O select fica fora de um <label>, então o clique nele não alterna o checkbox

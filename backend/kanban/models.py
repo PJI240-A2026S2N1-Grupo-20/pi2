@@ -105,8 +105,8 @@ class Tarefa(models.Model):
         fluxo_nome = self.fluxo.nome if self.fluxo else ''
         contato_nome = str(self.contato) if self.contato else 'Contato Não Definido'
         if fluxo_nome:
-            return f"{fluxo_nome} · {contato_nome}"
-        return f"Tarefa · {contato_nome}"
+            return f"{fluxo_nome} - {contato_nome}"
+        return f"Tarefa - {contato_nome}"
 
 
 class Subtarefa(models.Model):
