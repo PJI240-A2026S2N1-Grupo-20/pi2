@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import * as kanbanApi from '../api/kanbanApi';
 import { useAuth } from '../context/AuthContext';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Search } from 'lucide-react';
 
 export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const { user: currentUser } = useAuth();
@@ -14,6 +14,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
 
   const [selectedFluxo, setSelectedFluxo] = useState(task?.fluxo ? String(task.fluxo) : '');
   const [selectedContato, setSelectedContato] = useState(task?.contato ? String(task.contato) : '');
+  const [contactSearch, setContactSearch] = useState('');
   const [selectedResponsavel, setSelectedResponsavel] = useState(task?.responsavel ? String(task.responsavel) : '');
   const [dataPrevista, setDataPrevista] = useState(task?.data_prevista || '');
   const [observacoes, setObservacoes] = useState(task?.observacoes || '');
@@ -42,6 +43,28 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
     };
     fetchData();
   }, []);
+
+  const contatosFiltrados = useMemo(() => {
+    const termo = contactSearch.trim().toLowerCase();
+    if (!termo) return contatos;
+
+    const found = contatos.filter((c) => {
+      const nome = (c.nome || '').toLowerCase();
+      const email = (c.email || '').toLowerCase();
+      const telefone = (c.telefone || '').replace(/\D/g, '');
+      const termoDigitos = termo.replace(/\D/g, '');
+      return nome.includes(termo)
+        || email.includes(termo)
+        || (termoDigitos && telefone.includes(termoDigitos));
+    });
+
+    // Garante que o contato atualmente selecionado permaneça disponível
+    if (selectedContato && !found.some((c) => String(c.id) === String(selectedContato))) {
+      const sel = contatos.find((c) => String(c.id) === String(selectedContato));
+      if (sel) found.unshift(sel);
+    }
+    return found;
+  }, [contactSearch, contatos, selectedContato]);
 
   const handleSaveContact = async (e) => {
     e.preventDefault();
@@ -91,7 +114,6 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
             payload.estado = 'a_fazer';
           }
         } else if (task.data_prevista && ['a_fazer', 'em_andamento'].includes(task.estado)) {
-          // RF-15: remoção da data prevista retorna a tarefa para Pendências
           payload.estado = 'pendencias';
         }
         await kanbanApi.updateTask(task.id, payload);
@@ -210,17 +232,32 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                   </div>
                 </div>
               ) : (
-                <select
-                  value={selectedContato}
-                  onChange={(e) => setSelectedContato(e.target.value)}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '16px' }}
-                >
-                  <option value="">[Sem Contato Definido]</option>
-                  {contatos.map((c) => {
-                    const label = c.nome || c.email || c.telefone || `Contato #${c.id}`;
-                    return <option key={c.id} value={c.id}>{label}</option>;
-                  })}
-                </select>
+                <>
+                  <div style={{ position: 'relative', marginBottom: '0.35rem' }}>
+                    <Search size={14} style={{ position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nome, e-mail ou telefone..."
+                      value={contactSearch}
+                      onChange={(e) => setContactSearch(e.target.value)}
+                      style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 1.75rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '16px' }}
+                    />
+                  </div>
+                  <select
+                    value={selectedContato}
+                    onChange={(e) => setSelectedContato(e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '16px' }}
+                  >
+                    <option value="">[Sem Contato Definido]</option>
+                    {contatosFiltrados.length === 0 && (
+                      <option disabled value="__none__">Nenhum contato corresponde à busca</option>
+                    )}
+                    {contatosFiltrados.map((c) => {
+                      const label = c.nome || c.email || c.telefone || `Contato #${c.id}`;
+                      return <option key={c.id} value={c.id}>{label}</option>;
+                    })}
+                  </select>
+                </>
               )}
             </div>
 
