@@ -225,7 +225,7 @@ export const TaskCard = ({
 
                     <li style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px solid #f3f4f6', position: 'relative' }}>
                       {sub.tipo === 'resultado' ? (
-                        // Tipo resultado: mantém <div> — o <select> é o alvo de clique,
+                        // Tipo resultado: mantém <div>; o <select> é o alvo de clique,
                         // então envolvê-lo em <label> dispararia o checkbox indevidamente.
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, marginRight: '0.5rem' }}>
                           <input

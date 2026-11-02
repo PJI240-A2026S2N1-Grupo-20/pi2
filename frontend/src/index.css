@@ -37,12 +37,12 @@ html.a11y-negative-contrast body {
   filter: invert(100%) hue-rotate(180deg);
 }
 
-/* Luz de Cor de Fundo — bege suave, visível na área de conteúdo (main) */
+/* Luz de Cor de Fundo: bege suave, visível na área de conteúdo (main) */
 html.a11y-soft-bg body {
   background-color: #fff8dc !important;
 }
 
-/* Fonte Legível — alternativa gratuita com fallback universal */
+/* Fonte Legível: alternativa gratuita com fallback universal */
 html.a11y-readable-font body,
 html.a11y-readable-font body * {
   font-family: 'Atkinson Hyperlegible', Verdana, Tahoma, sans-serif;

@@ -58,7 +58,7 @@ export const AccessibilityMenu = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-      /* quota ou modo privado — silencioso */
+      /* quota ou modo privado: silencioso */
     }
   }, [state]);
 
