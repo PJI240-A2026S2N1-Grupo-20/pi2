@@ -105,3 +105,27 @@ class KanbanBackendTestCase(TestCase):
         tarefa.refresh_from_db()
         self.assertEqual(tarefa.estado, 'pendencias')
         self.assertIsNone(tarefa.data_prevista)
+
+    def test_rf13_vendedor_nao_pode_reassinar_responsavel(self):
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        outro = Usuario.objects.create_user(username='outro_x', password='x', papel='vendedor')
+        tarefa = Tarefa.objects.create(
+            contato=self.contato, criado_por=self.user, responsavel=self.user
+        )
+        url = reverse('tarefa-detail', args=[tarefa.id])
+        response = client.patch(url, {'responsavel': outro.id}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_rf13_subgerente_pode_reassinar_responsavel(self):
+        subgerente = Usuario.objects.create_user(username='sub_x', password='x', papel='subgerente')
+        novo_resp = Usuario.objects.create_user(username='vend_y', password='x', papel='vendedor')
+        client = APIClient()
+        client.force_authenticate(user=subgerente)
+        tarefa = Tarefa.objects.create(
+            contato=self.contato, criado_por=self.user, responsavel=self.user
+        )
+        url = reverse('tarefa-detail', args=[tarefa.id])
+        response = client.patch(url, {'responsavel': novo_resp.id}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['responsavel'], novo_resp.id)

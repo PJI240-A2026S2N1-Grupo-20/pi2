@@ -16,3 +16,5 @@ export const getSubtarefas = (tarefaId) => api.get(`/kanban/subtarefas/?tarefa=$
 export const createSubtarefa = (data) => api.post('/kanban/subtarefas/', data);
 export const updateSubtarefa = (id, data) => api.patch(`/kanban/subtarefas/${id}/`, data);
 export const deleteSubtarefa = (id) => api.delete(`/kanban/subtarefas/${id}/`);
+
+export const getUsuarios = () => api.get('/auth/usuarios/');

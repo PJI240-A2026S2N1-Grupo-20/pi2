@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import * as kanbanApi from '../api/kanbanApi';
+import { useAuth } from '../context/AuthContext';
 import { X, Plus } from 'lucide-react';
 
 export const TaskModal = ({ task, onClose, onTaskSaved }) => {
+  const { user: currentUser } = useAuth();
+  const canAssign = ['subgerente', 'gerente', 'administrador'].includes(currentUser?.papel);
+
   const [contatos, setContatos] = useState([]);
   const [fluxos, setFluxos] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [selectedFluxo, setSelectedFluxo] = useState(task?.fluxo ? String(task.fluxo) : '');
   const [selectedContato, setSelectedContato] = useState(task?.contato ? String(task.contato) : '');
+  const [selectedResponsavel, setSelectedResponsavel] = useState(task?.responsavel ? String(task.responsavel) : '');
   const [dataPrevista, setDataPrevista] = useState(task?.data_prevista || '');
   const [observacoes, setObservacoes] = useState(task?.observacoes || '');
   const [error, setError] = useState('');
@@ -20,12 +26,14 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [resContatos, resFluxos] = await Promise.all([
+        const [resContatos, resFluxos, resUsuarios] = await Promise.all([
           kanbanApi.getContatos(),
-          kanbanApi.getFluxos()
+          kanbanApi.getFluxos(),
+          kanbanApi.getUsuarios()
         ]);
         setContatos(resContatos.data || []);
         setFluxos(resFluxos.data || []);
+        setUsuarios(resUsuarios.data || []);
       } catch (err) {
         console.error('Erro ao carregar dados no modal:', err);
       } finally {
@@ -73,6 +81,10 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
         observacoes: observacoes.trim() || ''
       };
 
+      if (canAssign && selectedResponsavel) {
+        payload.responsavel = parseInt(selectedResponsavel, 10);
+      }
+
       if (task) {
         if (dataPrevista) {
           if (task.estado === 'pendencias') {
@@ -90,7 +102,10 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
       if (onTaskSaved) onTaskSaved();
       onClose();
     } catch (err) {
-      const detail = err.response?.data?.detail || err.response?.data?.data_prevista?.[0] || 'Erro ao salvar tarefa.';
+      const detail = err.response?.data?.detail
+        || err.response?.data?.responsavel?.[0]
+        || err.response?.data?.data_prevista?.[0]
+        || 'Erro ao salvar tarefa.';
       setError(detail);
     }
   };
@@ -206,6 +221,38 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                     return <option key={c.id} value={c.id}>{label}</option>;
                   })}
                 </select>
+              )}
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.35rem', color: '#374151' }}>
+                Responsável
+              </label>
+              <select
+                value={selectedResponsavel}
+                onChange={(e) => setSelectedResponsavel(e.target.value)}
+                disabled={!canAssign}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  fontSize: '16px',
+                  backgroundColor: canAssign ? '#ffffff' : '#f3f4f6',
+                  color: canAssign ? '#111827' : '#4b5563',
+                  cursor: canAssign ? 'pointer' : 'not-allowed'
+                }}
+              >
+                {!task && <option value="">[Atribuir a mim mesmo]</option>}
+                {task && !selectedResponsavel && <option value="">[Sem responsável]</option>}
+                {usuarios.map((u) => (
+                  <option key={u.id} value={u.id}>{u.username} ({u.papel_display || u.papel})</option>
+                ))}
+              </select>
+              {!canAssign && (
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                  Apenas Subgerentes, Gerentes ou Administradores podem alterar o responsável.
+                </div>
               )}
             </div>
 

@@ -2,10 +2,12 @@ from rest_framework import serializers
 from .models import Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa
 from accounts.models import Usuario
 
+
 class ContatoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contato
         fields = ['id', 'nome', 'telefone', 'email', 'ativo', 'criado_em']
+
 
 class PassoFluxoSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(required=False)
@@ -13,6 +15,7 @@ class PassoFluxoSerializer(serializers.ModelSerializer):
     class Meta:
         model = PassoFluxo
         fields = ['id', 'texto', 'ordem']
+
 
 class FluxoSerializer(serializers.ModelSerializer):
     passos = PassoFluxoSerializer(many=True, required=False)
@@ -48,12 +51,14 @@ class FluxoSerializer(serializers.ModelSerializer):
                 )
         return instance
 
+
 class SubtarefaSerializer(serializers.ModelSerializer):
     tarefa = serializers.PrimaryKeyRelatedField(queryset=Tarefa.objects.all())
 
     class Meta:
         model = Subtarefa
         fields = ['id', 'tarefa', 'texto', 'concluida', 'ordem', 'tipo', 'opcao_selecionada']
+
 
 class TarefaSerializer(serializers.ModelSerializer):
     subtarefas = SubtarefaSerializer(many=True, read_only=True)
@@ -77,3 +82,27 @@ class TarefaSerializer(serializers.ModelSerializer):
         if obj.criado_por:
             return obj.criado_por.username
         return 'Sem responsável'
+
+    def validate_responsavel(self, value):
+        """RN-02: apenas Subgerente/Gerente/Administrador podem reatribuir o responsável."""
+        request = self.context.get('request')
+        if not request or not request.user or not request.user.is_authenticated:
+            return value
+
+        if getattr(request.user, 'papel', None) != 'vendedor':
+            return value
+
+        if self.instance is None:
+            # Criação: vendedor só pode manter a si mesmo
+            if value is not None and value.id != request.user.id:
+                raise serializers.ValidationError(
+                    "Apenas Subgerentes, Gerentes ou Administradores podem atribuir outro responsável."
+                )
+        else:
+            # Edição: vendedor não pode alterar (nem limpar) o responsável
+            novo_id = value.id if value else None
+            if novo_id != self.instance.responsavel_id:
+                raise serializers.ValidationError(
+                    "Apenas Subgerentes, Gerentes ou Administradores podem reatribuir o responsável."
+                )
+        return value

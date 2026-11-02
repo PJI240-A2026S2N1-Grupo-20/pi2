@@ -73,3 +73,12 @@ class AccountsTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['limiares']['l1'], 1)
         self.assertEqual(response.data['limiares']['l2'], 5)
+
+    def test_endpoint_lista_usuarios_retorna_campos_minimos(self):
+        self.client.force_authenticate(user=self.vendedor)
+        response = self.client.get(reverse('usuarios'))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        usernames = [u['username'] for u in response.data]
+        self.assertIn('vendedor_test', usernames)
+        self.assertIn('admin_test', usernames)
+        self.assertEqual(set(response.data[0].keys()), {'id', 'username', 'papel', 'papel_display'})
