@@ -25,6 +25,8 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const [showNewContact, setShowNewContact] = useState(false);
   const [newContactInput, setNewContactInput] = useState('');
   const [contactError, setContactError] = useState('');
+  const [arquivosPendentes, setArquivosPendentes] = useState([]);
+  const [tarefaCriada, setTarefaCriada] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -112,6 +114,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
 
   const handleSubmitTask = async (e) => {
     e.preventDefault();
+    if (tarefaCriada) return;
     setError('');
     try {
       const payload = {
@@ -135,7 +138,30 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
         }
         await kanbanApi.updateTask(task.id, payload);
       } else {
-        await kanbanApi.createTarefa(payload);
+        const resposta = await kanbanApi.createTarefa(payload);
+        const novaTarefa = resposta.data;
+
+        if (arquivosPendentes.length > 0 && novaTarefa && novaTarefa.id) {
+          const falhas = [];
+          for (const f of arquivosPendentes) {
+            try {
+              await kanbanApi.uploadAnexo(novaTarefa.id, f);
+            } catch (err) {
+              falhas.push(f.name);
+            }
+          }
+          if (falhas.length > 0) {
+            setTarefaCriada(novaTarefa);
+            setArquivosPendentes([]);
+            setError(
+              'Tarefa criada, mas nao foi possivel enviar: ' +
+                falhas.join(', ') +
+                '. Feche e abra a tarefa em Editar para tentar novamente.'
+            );
+            if (onTaskSaved) onTaskSaved();
+            return;
+          }
+        }
       }
 
       if (onTaskSaved) onTaskSaved();
@@ -188,7 +214,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
           }}
         >
           <h3 style={{ fontSize: '1.15rem', fontWeight: 'bold', margin: 0, color: '#111827' }}>
-            {task ? 'Editar Tarefa' : 'Nova Tarefa'}
+            {task ? 'Editar Tarefa' : (tarefaCriada ? 'Tarefa criada' : 'Nova Tarefa')}
           </h3>
           <button
             onClick={onClose}
@@ -528,9 +554,20 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
               />
             </div>
 
-            {task && (
+            {(task || tarefaCriada) && (
               <div style={{ marginBottom: '1.25rem' }}>
-                <AnexoManager tarefaId={task.id} initialAnexos={task.anexos || []} />
+                <AnexoManager
+                  tarefaId={(task || tarefaCriada).id}
+                  initialAnexos={(task || tarefaCriada).anexos || []}
+                />
+              </div>
+            )}
+            {!task && !tarefaCriada && (
+              <div style={{ marginBottom: '1.25rem' }}>
+                <AnexoManager
+                  arquivosPendentes={arquivosPendentes}
+                  onArquivosChange={setArquivosPendentes}
+                />
               </div>
             )}
 
@@ -550,21 +587,40 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
               >
                 Cancelar
               </button>
-              <button
-                type="submit"
-                style={{
-                  padding: '0.5rem 1rem',
-                  border: 'none',
-                  borderRadius: '4px',
-                  background: '#2563eb',
-                  color: '#ffffff',
-                  fontWeight: '600',
-                  fontSize: '0.875rem',
-                  cursor: 'pointer',
-                }}
-              >
-                {task ? 'Salvar Alterações' : 'Criar Tarefa'}
-              </button>
+              {tarefaCriada ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: '#2563eb',
+                    color: '#ffffff',
+                    fontWeight: '600',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Fechar
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  style={{
+                    padding: '0.5rem 1rem',
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: '#2563eb',
+                    color: '#ffffff',
+                    fontWeight: '600',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {task ? 'Salvar Alterações' : 'Criar Tarefa'}
+                </button>
+              )}
             </div>
           </form>
         )}

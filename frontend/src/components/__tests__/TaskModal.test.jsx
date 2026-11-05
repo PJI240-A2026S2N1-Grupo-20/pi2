@@ -30,6 +30,10 @@ describe('TaskModal - Testes de Contato por Nome, E-mail e Telefone', () => {
         { id: 99, username: 'admin_test', papel: 'administrador', papel_display: 'Administrador' },
       ],
     });
+    kanbanApi.createTarefa.mockResolvedValue({ data: { id: 123, anexos: [] } });
+    kanbanApi.uploadAnexo.mockResolvedValue({
+      data: { id: 1, nome: 'orcamento.pdf', tamanho: 100, url: '' },
+    });
   });
 
   test('Renderiza o modal e permite selecionar contato por e-mail', async () => {
@@ -71,7 +75,6 @@ describe('TaskModal - Testes de Contato por Nome, E-mail e Telefone', () => {
     fireEvent.change(busca, { target: { value: 'João' } });
     fireEvent.keyDown(busca, { key: 'Enter', code: 'Enter' });
 
-    // createTarefa não deve ter sido chamado (Enter não submete)
     expect(kanbanApi.createTarefa).not.toHaveBeenCalled();
   });
 
@@ -105,5 +108,66 @@ describe('TaskModal - Testes de Contato por Nome, E-mail e Telefone', () => {
     const selectContato = document.getElementById('task-contato');
     expect(selectContato).not.toBeNull();
     expect(selectContato.value).toBe('1');
+  });
+
+  // --------------------------------------------------------------- v0.8.0
+  test('v0.8.0: criacao permite selecionar PDF antes de salvar', async () => {
+    render(<TaskModal onClose={vi.fn()} onTaskSaved={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Buscar por nome/)).toBeInTheDocument();
+    });
+
+    const pdf = new File(['%PDF-1.4 test'], 'orcamento.pdf', { type: 'application/pdf' });
+    const inputArquivo = screen.getByLabelText(/selecionar arquivo pdf/i);
+    fireEvent.change(inputArquivo, { target: { files: [pdf] } });
+
+    expect(await screen.findByText('orcamento.pdf')).toBeInTheDocument();
+    // Nada foi enviado ainda (modo staging)
+    expect(kanbanApi.uploadAnexo).not.toHaveBeenCalled();
+  });
+
+  test('v0.8.0: ao criar tarefa com PDFs, envia apos receber o id', async () => {
+    const onTaskSaved = vi.fn();
+    const onClose = vi.fn();
+
+    render(<TaskModal onClose={onClose} onTaskSaved={onTaskSaved} />);
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Buscar por nome/)).toBeInTheDocument();
+    });
+
+    const pdf = new File(['%PDF-1.4 test'], 'orcamento.pdf', { type: 'application/pdf' });
+    const inputArquivo = screen.getByLabelText(/selecionar arquivo pdf/i);
+    fireEvent.change(inputArquivo, { target: { files: [pdf] } });
+
+    expect(await screen.findByText('orcamento.pdf')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Criar Tarefa/i }));
+
+    await waitFor(() => {
+      expect(kanbanApi.createTarefa).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(kanbanApi.uploadAnexo).toHaveBeenCalledWith(123, expect.any(File));
+    });
+    await waitFor(() => {
+      expect(onTaskSaved).toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  test('v0.8.0: arquivo nao-PDF e rejeitado no modo de criacao', async () => {
+    render(<TaskModal onClose={vi.fn()} onTaskSaved={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Buscar por nome/)).toBeInTheDocument();
+    });
+
+    const txt = new File(['hello'], 'nota.txt', { type: 'text/plain' });
+    const inputArquivo = screen.getByLabelText(/selecionar arquivo pdf/i);
+    fireEvent.change(inputArquivo, { target: { files: [txt] } });
+
+    expect(
+      await screen.findByText(/apenas arquivos em formato PDF/i)
+    ).toBeInTheDocument();
+    expect(kanbanApi.createTarefa).not.toHaveBeenCalled();
   });
 });

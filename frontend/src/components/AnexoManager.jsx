@@ -12,31 +12,59 @@ const formatBytes = (bytes) => {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 };
 
-export const AnexoManager = ({ tarefaId, initialAnexos = [] }) => {
+/**
+ * Gerenciador de anexos em PDF.
+ *
+ * Dois modos de operacao:
+ *  - Gerenciado (padrao): recebe tarefaId, faz upload imediato para
+ *    POST /api/kanban/tarefas/{id}/anexos/ e permite remover via DELETE.
+ *  - Staging: recebe arquivosPendentes + onArquivosChange. Apenas acumula
+ *    File[] em memoria. O upload ocorre depois que a tarefa e criada.
+ */
+export const AnexoManager = ({
+  tarefaId,
+  initialAnexos = [],
+  arquivosPendentes,
+  onArquivosChange,
+}) => {
+  const isStaging = Array.isArray(arquivosPendentes);
   const [anexos, setAnexos] = useState(initialAnexos || []);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
 
+  const total = isStaging ? arquivosPendentes.length : anexos.length;
+  const limiteAtingido = total >= MAX_ANEXOS;
+
   const handlePickFile = () => fileInputRef.current?.click();
+
+  const validarArquivo = (file) => {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      return 'Apenas arquivos em formato PDF sao aceitos.';
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return 'O arquivo excede o limite de 25 MB.';
+    }
+    if (total >= MAX_ANEXOS) {
+      return 'Limite de 20 anexos por tarefa ja atingido.';
+    }
+    return null;
+  };
 
   const handleUpload = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     setError('');
 
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      setError('Apenas arquivos em formato PDF sao aceitos.');
+    const msg = validarArquivo(file);
+    if (msg) {
+      setError(msg);
       e.target.value = '';
       return;
     }
-    if (file.size > MAX_FILE_SIZE) {
-      setError('O arquivo excede o limite de 25 MB.');
-      e.target.value = '';
-      return;
-    }
-    if (anexos.length >= MAX_ANEXOS) {
-      setError('Limite de 20 anexos por tarefa ja atingido.');
+
+    if (isStaging) {
+      onArquivosChange([...arquivosPendentes, file]);
       e.target.value = '';
       return;
     }
@@ -53,16 +81,43 @@ export const AnexoManager = ({ tarefaId, initialAnexos = [] }) => {
     }
   };
 
-  const handleDelete = async (anexoId) => {
-    if (!window.confirm('Remover este anexo?')) return;
+  const handleDelete = async (item) => {
     setError('');
+    if (isStaging) {
+      const idx = arquivosPendentes.indexOf(item);
+      if (idx >= 0) {
+        const next = [...arquivosPendentes];
+        next.splice(idx, 1);
+        onArquivosChange(next);
+      }
+      return;
+    }
+    if (!window.confirm('Remover este anexo?')) return;
     try {
-      await kanbanApi.deleteAnexo(tarefaId, anexoId);
-      setAnexos((prev) => prev.filter((a) => a.id !== anexoId));
+      await kanbanApi.deleteAnexo(tarefaId, item.id);
+      setAnexos((prev) => prev.filter((a) => a.id !== item.id));
     } catch (err) {
       setError(err.response?.data?.detail || 'Erro ao remover o anexo.');
     }
   };
+
+  const itens = isStaging
+    ? arquivosPendentes.map((f, i) => ({
+        key: `pend-${i}-${f.name}`,
+        nome: f.name,
+        tamanho: f.size,
+        url: null,
+        raw: f,
+      }))
+    : anexos.map((a) => ({
+        key: a.id,
+        nome: a.nome,
+        tamanho: a.tamanho,
+        url: a.url,
+        raw: a,
+      }));
+
+  const bloqueado = uploading || limiteAtingido;
 
   return (
     <div>
@@ -75,12 +130,12 @@ export const AnexoManager = ({ tarefaId, initialAnexos = [] }) => {
         }}
       >
         <label style={{ fontSize: '0.85rem', fontWeight: '500', color: '#374151' }}>
-          Anexos em PDF ({anexos.length}/{MAX_ANEXOS})
+          Anexos em PDF ({total}/{MAX_ANEXOS})
         </label>
         <button
           type="button"
           onClick={handlePickFile}
-          disabled={uploading || anexos.length >= MAX_ANEXOS}
+          disabled={bloqueado}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -92,20 +147,35 @@ export const AnexoManager = ({ tarefaId, initialAnexos = [] }) => {
             color: '#ffffff',
             fontSize: '0.75rem',
             fontWeight: '600',
-            cursor: uploading || anexos.length >= MAX_ANEXOS ? 'not-allowed' : 'pointer',
-            opacity: uploading || anexos.length >= MAX_ANEXOS ? 0.6 : 1,
+            cursor: bloqueado ? 'not-allowed' : 'pointer',
+            opacity: bloqueado ? 0.6 : 1,
           }}
         >
-          <Paperclip size={12} /> {uploading ? 'Enviando...' : 'Adicionar PDF'}
+          <Paperclip size={12} />
+          {uploading ? 'Enviando...' : 'Adicionar PDF'}
         </button>
         <input
           ref={fileInputRef}
           type="file"
           accept="application/pdf,.pdf"
           onChange={handleUpload}
+          aria-label="Selecionar arquivo PDF"
           style={{ display: 'none' }}
         />
       </div>
+
+      {isStaging && (
+        <p
+          style={{
+            fontSize: '0.72rem',
+            color: '#6b7280',
+            margin: '0 0 0.5rem 0',
+            fontStyle: 'italic',
+          }}
+        >
+          Os arquivos serao enviados automaticamente apos a criacao da tarefa.
+        </p>
+      )}
 
       {error && (
         <div
@@ -126,15 +196,15 @@ export const AnexoManager = ({ tarefaId, initialAnexos = [] }) => {
         </div>
       )}
 
-      {anexos.length === 0 ? (
+      {itens.length === 0 ? (
         <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: 0 }}>
           Nenhum anexo adicionado.
         </p>
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {anexos.map((a) => (
+          {itens.map((a) => (
             <li
-              key={a.id}
+              key={a.key}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -166,14 +236,19 @@ export const AnexoManager = ({ tarefaId, initialAnexos = [] }) => {
                   target="_blank"
                   rel="noreferrer"
                   aria-label={`Baixar ${a.nome}`}
-                  style={{ display: 'inline-flex', alignItems: 'center', color: '#2563eb', padding: '0.15rem' }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    color: '#2563eb',
+                    padding: '0.15rem',
+                  }}
                 >
                   <Download size={14} />
                 </a>
               )}
               <button
                 type="button"
-                onClick={() => handleDelete(a.id)}
+                onClick={() => handleDelete(a.raw)}
                 aria-label={`Remover ${a.nome}`}
                 style={{
                   background: 'transparent',
