@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa, Transicao
+from .models import (
+    Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa, Transicao, Auditoria,
+)
 
 
 class PassoFluxoInline(admin.TabularInline):
@@ -29,7 +31,20 @@ class SubtarefaInline(admin.TabularInline):
 class TransicaoInline(admin.TabularInline):
     model = Transicao
     extra = 0
-    readonly_fields = ('origem', 'destino', 'usuario', 'justificativa', 'resultado_snapshot', 'data_hora')
+    readonly_fields = (
+        'origem', 'destino', 'usuario', 'justificativa',
+        'resultado_snapshot', 'data_hora',
+    )
+    can_delete = False
+
+
+class AuditoriaInline(admin.TabularInline):
+    model = Auditoria
+    extra = 0
+    readonly_fields = (
+        'tipo_modificacao', 'usuario', 'dados_anteriores', 'dados_novos',
+        'justificativa', 'data_hora',
+    )
     can_delete = False
 
 
@@ -37,4 +52,17 @@ class TransicaoInline(admin.TabularInline):
 class TarefaAdmin(admin.ModelAdmin):
     list_display = ('id', 'fluxo', 'contato', 'estado', 'data_prevista', 'criado_por')
     list_filter = ('estado', 'fluxo')
-    inlines = [SubtarefaInline, TransicaoInline]
+    inlines = [SubtarefaInline, TransicaoInline, AuditoriaInline]
+
+
+@admin.register(Auditoria)
+class AuditoriaAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'tarefa_id', 'tipo_modificacao', 'usuario', 'data_hora',
+    )
+    list_filter = ('tipo_modificacao',)
+    search_fields = ('tarefa__id', 'justificativa')
+    readonly_fields = (
+        'tarefa', 'usuario', 'tipo_modificacao', 'entidade', 'entidade_id',
+        'dados_anteriores', 'dados_novos', 'justificativa', 'data_hora',
+    )

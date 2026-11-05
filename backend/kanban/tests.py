@@ -309,3 +309,142 @@ class KanbanBackendTestCase(TestCase):
         response = client.post(url, {'destino': 'a_fazer', 'justificativa': 'x'}, format='json')
         self.assertEqual(response.status_code, 400)
         self.assertIn('data prevista', response.data['detail'].lower())
+
+    # ================================================================= v0.9.0
+    def test_rf28_criacao_de_tarefa_registra_auditoria(self):
+        """RF-28: uma entrada de auditoria deve ser criada ao criar a tarefa."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        url = reverse('tarefa-list')
+        payload = {
+            'contato': self.contato.id,
+            'data_prevista': '2026-10-01',
+            'observacoes': 'Criada para o teste de auditoria',
+        }
+        response = client.post(url, payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        tarefa_id = response.data['id']
+        tarefa = Tarefa.objects.get(id=tarefa_id)
+
+        auditorias = tarefa.auditorias.all()
+        self.assertEqual(auditorias.count(), 1)
+        aud = auditorias.first()
+        self.assertEqual(aud.tipo_modificacao, 'criacao')
+        self.assertEqual(aud.usuario_id, self.user.id)
+        self.assertEqual(aud.dados_anteriores, {})
+        self.assertEqual(aud.dados_novos['observacoes'], 'Criada para o teste de auditoria')
+        self.assertEqual(aud.dados_novos['estado'], 'a_fazer')
+
+    def test_rn10_reassignacao_responsavel_gera_auditoria_especifica(self):
+        """RN-10: reatribuição de responsável precisa deixar rastro dedicado."""
+        subgerente = Usuario.objects.create_user(
+            username='sub_audit', password='x', papel='subgerente',
+        )
+        novo_resp = Usuario.objects.create_user(
+            username='vend_novo', password='x', papel='vendedor',
+        )
+        client = APIClient()
+        client.force_authenticate(user=subgerente)
+
+        tarefa = Tarefa.objects.create(
+            contato=self.contato, criado_por=self.user,
+            responsavel=self.user, data_prevista=date(2026, 10, 1),
+        )
+        tarefa.auditorias.all().delete()
+
+        url = reverse('tarefa-detail', args=[tarefa.id])
+        response = client.patch(url, {
+            'responsavel': novo_resp.id,
+            'justificativa_responsavel': 'Redistribuicao de carga de trabalho',
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+
+        tarefa.refresh_from_db()
+        auditorias = tarefa.auditorias.filter(tipo_modificacao='reassignacao_responsavel')
+        self.assertEqual(auditorias.count(), 1)
+        aud = auditorias.first()
+        self.assertEqual(aud.dados_anteriores['responsavel'], self.user.id)
+        self.assertEqual(aud.dados_novos['responsavel'], novo_resp.id)
+        self.assertEqual(aud.justificativa, 'Redistribuicao de carga de trabalho')
+        self.assertEqual(aud.usuario_id, subgerente.id)
+
+    def test_rf28_atualizacao_de_campo_gera_auditoria(self):
+        """RF-28: alterações de campos relevantes precisam ser auditadas."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        tarefa = Tarefa.objects.create(
+            contato=self.contato, data_prevista=date(2026, 10, 1),
+            criado_por=self.user, responsavel=self.user,
+        )
+        tarefa.auditorias.all().delete()
+
+        url = reverse('tarefa-detail', args=[tarefa.id])
+        response = client.patch(url, {'observacoes': 'Nova observacao'}, format='json')
+        self.assertEqual(response.status_code, 200)
+
+        tarefa.refresh_from_db()
+        atualizacoes = tarefa.auditorias.filter(tipo_modificacao='atualizacao')
+        self.assertGreaterEqual(atualizacoes.count(), 1)
+        aud = atualizacoes.first()
+        self.assertEqual(aud.dados_anteriores['observacoes'], '')
+        self.assertEqual(aud.dados_novos['observacoes'], 'Nova observacao')
+
+    def test_rf28_auditorias_expostas_no_serializer(self):
+        """RF-28: o serializer da tarefa deve incluir as auditorias."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        tarefa = Tarefa.objects.create(contato=self.contato, criado_por=self.user)
+
+        url = reverse('tarefa-detail', args=[tarefa.id])
+        response = client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('auditorias', response.data)
+        self.assertIsInstance(response.data['auditorias'], list)
+
+    def test_rf28_reabertura_registra_auditoria(self):
+        """RF-28: a reabertura também precisa constar na trilha de auditoria."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        tarefa = Tarefa.objects.create(
+            contato=self.contato, data_prevista=date(2026, 10, 1),
+            criado_por=self.user, estado='concluido',
+        )
+        tarefa.data_conclusao = timezone.now()
+        tarefa.save()
+        tarefa.auditorias.all().delete()
+
+        url = reverse('tarefa-reabrir', args=[tarefa.id])
+        response = client.post(url, {
+            'destino': 'em_andamento',
+            'justificativa': 'Revisao solicitada pelo cliente',
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+
+        tarefa.refresh_from_db()
+        auditorias = tarefa.auditorias.filter(tipo_modificacao='reabertura')
+        self.assertEqual(auditorias.count(), 1)
+        aud = auditorias.first()
+        self.assertEqual(aud.dados_anteriores['estado'], 'concluido')
+        self.assertEqual(aud.dados_novos['estado'], 'em_andamento')
+        self.assertEqual(aud.justificativa, 'Revisao solicitada pelo cliente')
+
+    def test_rf28_sem_alteracao_nao_gera_auditoria(self):
+        """RF-28: PATCH idêntico ao estado atual não deve gerar ruído na trilha."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        tarefa = Tarefa.objects.create(
+            contato=self.contato, data_prevista=date(2026, 10, 1),
+            criado_por=self.user, responsavel=self.user,
+            observacoes='Mesma observacao',
+        )
+        tarefa.auditorias.all().delete()
+
+        url = reverse('tarefa-detail', args=[tarefa.id])
+        response = client.patch(
+            url, {'observacoes': 'Mesma observacao'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(tarefa.auditorias.count(), 0)

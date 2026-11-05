@@ -11,10 +11,82 @@ import {
   MessageCircle, Mail, Paperclip,
 } from 'lucide-react';
 
+const CAMPO_LABEL = {
+  estado: 'Estado',
+  responsavel: 'Responsável',
+  data_prevista: 'Data prevista',
+  fluxo: 'Fluxo',
+  contato: 'Contato',
+  observacoes: 'Observações',
+};
+
+function formatarValor(campo, valor) {
+  if (valor === null || valor === undefined || valor === '') return 'vazio';
+  if (campo === 'estado' && ESTADO_LABEL[valor]) return ESTADO_LABEL[valor];
+  if (campo === 'data_prevista') return formatDateBR(valor);
+  return String(valor);
+}
+
 function toWhatsAppNumber(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (!digits) return '';
   return digits.length >= 12 ? digits : `55${digits}`;
+}
+
+function EntradaAuditoria({ entry }) {
+  const renderDetalhes = () => {
+    if (entry.tipo_modificacao === 'criacao') {
+      return <span>Tarefa criada na coleção {formatarValor('estado', entry.dados_novos.estado)}.</span>;
+    }
+    if (entry.tipo_modificacao === 'reassignacao_responsavel') {
+      return <span>Responsável alterado.</span>;
+    }
+    if (entry.tipo_modificacao === 'reabertura') {
+      const de = formatarValor('estado', entry.dados_anteriores.estado);
+      const para = formatarValor('estado', entry.dados_novos.estado);
+      return <span>Reaberta de {de} para {para}.</span>;
+    }
+    if (entry.tipo_modificacao === 'atualizacao') {
+      const alteracoes = Object.keys(entry.dados_anteriores || {}).filter(
+        (campo) => entry.dados_anteriores[campo] !== (entry.dados_novos || {})[campo]
+      );
+      if (alteracoes.length === 0) return null;
+      return (
+        <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.1rem' }}>
+          {alteracoes.map((campo) => (
+            <li key={campo}>
+              <strong>{CAMPO_LABEL[campo] || campo}:</strong>{' '}
+              {formatarValor(campo, entry.dados_anteriores[campo])} para{' '}
+              {formatarValor(campo, entry.dados_novos[campo])}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <li style={{ padding: '0.5rem 0', borderBottom: '1px solid #f3f4f6' }}>
+      <div style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#6b7280' }}>
+        {formatDateTimeBR(entry.data_hora)}
+      </div>
+      <div style={{ marginTop: '0.15rem' }}>
+        <strong>{entry.tipo_display}</strong>
+        {entry.usuario_nome && (
+          <span style={{ color: '#6b7280' }}> por {entry.usuario_nome}</span>
+        )}
+      </div>
+      <div style={{ marginTop: '0.15rem', color: '#374151' }}>
+        {renderDetalhes()}
+      </div>
+      {entry.justificativa && (
+        <div style={{ fontStyle: 'italic', color: '#4b5563', marginTop: '0.15rem' }}>
+          "{entry.justificativa}"
+        </div>
+      )}
+    </li>
+  );
 }
 
 export const TaskCard = ({
@@ -39,6 +111,7 @@ export const TaskCard = ({
   const [newSubText, setNewSubText] = useState('');
   const [showCardMenu, setShowCardMenu] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showAuditHistory, setShowAuditHistory] = useState(false);
 
   const moveMenuRef = useRef(null);
   const moveButtonRef = useRef(null);
@@ -46,7 +119,6 @@ export const TaskCard = ({
   const cardMenuButtonRef = useRef(null);
   const title = getTaskTitle(task);
 
-  // RF-30: status de atraso em função dos limiares
   const delayInfo = getDelayInfo(task, limiares);
   const showDelayIndicator =
     delayInfo.status === DELAY_STATUS.warning || delayInfo.status === DELAY_STATUS.critical;
@@ -69,7 +141,7 @@ export const TaskCard = ({
   }, [showMoveMenu]);
 
   useEffect(() => {
-    if (!showMoveMenu && activeMenuSubId === null && !showCardMenu && !showHistory) return;
+    if (!showMoveMenu && activeMenuSubId === null && !showCardMenu && !showHistory && !showAuditHistory) return;
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       if (showMoveMenu) {
@@ -82,10 +154,11 @@ export const TaskCard = ({
         cardMenuButtonRef.current?.focus();
       }
       if (showHistory) setShowHistory(false);
+      if (showAuditHistory) setShowAuditHistory(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [showMoveMenu, activeMenuSubId, showCardMenu, showHistory]);
+  }, [showMoveMenu, activeMenuSubId, showCardMenu, showHistory, showAuditHistory]);
 
   useEffect(() => {
     if (!showCardMenu) return;
@@ -141,6 +214,8 @@ export const TaskCard = ({
     return true;
   });
 
+  const auditorias = task.auditorias || [];
+
   return (
     <div
       draggable
@@ -173,7 +248,6 @@ export const TaskCard = ({
           {title}
         </h4>
 
-        {/* RF-30: ponto colorido sempre visível (colapsado) com aria-label */}
         {showDelayIndicator && (
           <span
             aria-label={`Alerta de prazo: ${delayInfo.label}`}
@@ -260,7 +334,6 @@ export const TaskCard = ({
                 <Calendar size={14} color={borderColor} />
                 <span><strong>Previsão:</strong> {formatDateBR(task.data_prevista)}</span>
 
-                {/* RF-30: badge textual (não depende só de cor - RNF-01) */}
                 {showDelayIndicator && (
                   <span
                     role="status"
@@ -343,7 +416,7 @@ export const TaskCard = ({
                     position: 'absolute', top: '100%', right: 0, marginTop: '0.25rem',
                     backgroundColor: '#ffffff', border: '1px solid #d1d5db',
                     borderRadius: '6px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                    zIndex: 40, minWidth: '200px', padding: '0.25rem 0',
+                    zIndex: 40, minWidth: '220px', padding: '0.25rem 0',
                   }}
                 >
                   <button
@@ -365,6 +438,26 @@ export const TaskCard = ({
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                   >
                     <History size={14} /> Histórico de transições
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowCardMenu(false);
+                      setShowAuditHistory(true);
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '0.4rem',
+                      width: '100%', textAlign: 'left',
+                      padding: '0.45rem 0.75rem', border: 'none',
+                      background: 'transparent', fontSize: '0.8rem',
+                      color: '#1f2937', cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f3f4f6'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <FileText size={14} /> Trilha de auditoria
                   </button>
                 </div>
               )}
@@ -631,7 +724,7 @@ export const TaskCard = ({
                     </div>
                     <div style={{ marginTop: '0.15rem' }}>
                       <strong>{ESTADO_LABEL[t.origem] || t.origem}</strong>
-                      {' → '}
+                      {' para '}
                       <strong>{ESTADO_LABEL[t.destino] || t.destino}</strong>
                       {t.usuario_nome && (
                         <span style={{ color: '#6b7280' }}> - {t.usuario_nome}</span>
@@ -643,6 +736,57 @@ export const TaskCard = ({
                       </div>
                     )}
                   </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showAuditHistory && (
+        <div
+          onClick={(e) => { e.stopPropagation(); setShowAuditHistory(false); }}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            zIndex: 1250, padding: '1rem',
+          }}
+        >
+          <div
+            role="dialog"
+            aria-label="Trilha de Auditoria"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: '#ffffff', borderRadius: '8px',
+              maxWidth: '560px', width: '100%',
+              maxHeight: '80vh', overflowY: 'auto',
+              padding: '1.25rem',
+              boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold', color: '#111827' }}>
+                Trilha de Auditoria
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAuditHistory(false)}
+                aria-label="Fechar"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {auditorias.length === 0 ? (
+              <p style={{ color: '#6b7280', fontSize: '0.85rem', margin: 0 }}>
+                Nenhum registro de auditoria para esta tarefa.
+              </p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.8rem', color: '#374151' }}>
+                {auditorias.map((a) => (
+                  <EntradaAuditoria key={a.id} entry={a} />
                 ))}
               </ul>
             )}

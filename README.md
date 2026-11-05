@@ -1,7 +1,6 @@
-# EletroKanban: Sistema de Gestão de Negociações (v0.8.0)
+# EletroKanban: Sistema de Gestão de Negociações (v0.9.0)
 
 Aplicação web destinada ao gerenciamento de negociações, vendas, orçamentos e atividades do setor comercial com abordagem para dispositivos móveis, desenvolvida para o Projeto Integrador Univesp.
-7
 ## Tecnologias Utilizadas
 - **Backend:** Django 6.1.1, Django REST Framework, drf-spectacular (OpenAPI/Swagger)
 - **Frontend:** React 18+ (Vite), Axios, React Router DOM, Lucide React, Vitest, React Testing Library

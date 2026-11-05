@@ -18,7 +18,7 @@ class Contato(models.Model):
     atualizado_em = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.nome or self.email or self.telefone or "Contato Sem Nome"
+        return self.nome or self.email or self.telefone or "Contato sem nome"
 
     @property
     def nome_exibicao(self):
@@ -107,7 +107,7 @@ class Tarefa(models.Model):
 
     def __str__(self):
         fluxo_nome = self.fluxo.nome if self.fluxo else ''
-        contato_nome = str(self.contato) if self.contato else 'Contato Não Definido'
+        contato_nome = str(self.contato) if self.contato else 'Contato não definido'
         if fluxo_nome:
             return f"{fluxo_nome} - {contato_nome}"
         return f"Tarefa - {contato_nome}"
@@ -182,3 +182,46 @@ class Anexo(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class Auditoria(models.Model):
+    """RF-28 e RN-10: trilha imutável de modificações relevantes da tarefa.
+
+    Cada registro guarda snapshots anteriores/posteriores em JSONB, o usuário
+    responsável pela ação e, quando aplicável, uma justificativa textual.
+    """
+    TIPO_CHOICES = (
+        ('criacao', 'Criação'),
+        ('atualizacao', 'Atualização'),
+        ('reabertura', 'Reabertura'),
+        ('reassignacao_responsavel', 'Reatribuição de responsável'),
+        ('anexo', 'Anexo'),
+    )
+
+    tarefa = models.ForeignKey(
+        Tarefa, on_delete=models.CASCADE, related_name='auditorias'
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    tipo_modificacao = models.CharField(max_length=30, choices=TIPO_CHOICES)
+    entidade = models.CharField(max_length=50, default='tarefa')
+    entidade_id = models.IntegerField(null=True, blank=True)
+    dados_anteriores = models.JSONField(default=dict, blank=True)
+    dados_novos = models.JSONField(default=dict, blank=True)
+    justificativa = models.TextField(blank=True, default='')
+    data_hora = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-data_hora']
+        verbose_name = 'Auditoria'
+        verbose_name_plural = 'Auditorias'
+
+    def __str__(self):
+        return (
+            f"Tarefa {self.tarefa_id}: {self.get_tipo_modificacao_display()} "
+            f"em {self.data_hora:%d/%m/%Y %H:%M}"
+        )

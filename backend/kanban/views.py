@@ -5,7 +5,9 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from .models import Contato, Fluxo, Tarefa, Subtarefa, Transicao, Anexo, validar_pdf
+from .models import (
+    Contato, Fluxo, Tarefa, Subtarefa, Transicao, Anexo, Auditoria, validar_pdf,
+)
 from .serializers import (
     ContatoSerializer,
     FluxoSerializer,
@@ -22,6 +24,40 @@ TRANSICOES_PERMITIDAS = {
     'em_andamento': {'pendencias', 'a_fazer', 'concluido'},
     'concluido': {'a_fazer', 'em_andamento'},
 }
+
+
+def _serializar_campos_auditaveis(tarefa):
+    """RF-28: extrai um snapshot JSON-serializável dos campos auditáveis."""
+    return {
+        'estado': tarefa.estado or '',
+        'responsavel': tarefa.responsavel_id,
+        'data_prevista': (
+            tarefa.data_prevista.isoformat() if tarefa.data_prevista else None
+        ),
+        'fluxo': tarefa.fluxo_id,
+        'contato': tarefa.contato_id,
+        'observacoes': tarefa.observacoes or '',
+    }
+
+
+def _registrar_auditoria(tarefa, usuario, tipo, anteriores, novos, justificativa=''):
+    """RF-28: registra uma entrada de auditoria apenas quando há diferença."""
+    if anteriores == novos:
+        return None
+    return Auditoria.objects.create(
+        tarefa=tarefa,
+        usuario=(
+            usuario
+            if usuario and getattr(usuario, 'is_authenticated', False)
+            else None
+        ),
+        tipo_modificacao=tipo,
+        entidade='tarefa',
+        entidade_id=tarefa.id,
+        dados_anteriores=anteriores or {},
+        dados_novos=novos or {},
+        justificativa=(justificativa or '').strip(),
+    )
 
 
 class ContatoViewSet(viewsets.ModelViewSet):
@@ -49,7 +85,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             Tarefa.objects
             .filter(deletado=False)
             .select_related('fluxo', 'contato', 'responsavel', 'criado_por')
-            .prefetch_related('subtarefas', 'transicoes', 'anexos')
+            .prefetch_related('subtarefas', 'transicoes', 'auditorias', 'anexos')
             .order_by('criado_em')
         )
 
@@ -86,23 +122,30 @@ class TarefaViewSet(viewsets.ModelViewSet):
                     ordem_count += 1
                 Subtarefa.objects.create(
                     tarefa=tarefa,
-                    texto='Resultado [Concluida | Cancelada]',
+                    texto='Resultado [Concluída | Cancelada]',
                     ordem=ordem_count,
                     tipo='resultado'
                 )
             else:
                 Subtarefa.objects.create(
                     tarefa=tarefa,
-                    texto='Resultado [Concluida | Cancelada]',
+                    texto='Resultado [Concluída | Cancelada]',
                     ordem=1,
                     tipo='resultado'
                 )
+
+        _registrar_auditoria(
+            tarefa, self.request.user, 'criacao',
+            anteriores={},
+            novos=_serializar_campos_auditaveis(tarefa),
+        )
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         data = request.data
         estado_anterior = instance.estado
+        campos_antes = _serializar_campos_auditaveis(instance)
 
         data_removida = 'data_prevista' in data and not data.get('data_prevista')
         novo_estado = data.get('estado', instance.estado)
@@ -131,7 +174,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             permitidas = TRANSICOES_PERMITIDAS.get(instance.estado, set())
             if novo_estado not in permitidas:
                 return Response(
-                    {'detail': "Movimentacao nao permitida entre estas colecoes."},
+                    {'detail': "Movimentação não permitida entre estas coleções."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -139,7 +182,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if novo_estado in ['a_fazer', 'em_andamento'] and not data_prevista:
             return Response(
-                {'detail': "Tarefas nas colecoes 'A fazer' ou 'Em andamento' exigem uma Data Prevista."},
+                {'detail': "Tarefas nas coleções 'A fazer' ou 'Em andamento' exigem uma Data Prevista."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -147,7 +190,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             res_sub = instance.subtarefas.filter(tipo='resultado').first()
             if res_sub and not res_sub.opcao_selecionada and not res_sub.concluida:
                 return Response(
-                    {'detail': "A tarefa so pode ser concluida com o preenchimento da subtarefa de Resultado."},
+                    {'detail': "A tarefa só pode ser concluída com o preenchimento da subtarefa de Resultado."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -171,6 +214,29 @@ class TarefaViewSet(viewsets.ModelViewSet):
         if instance.estado != estado_anterior:
             self._registrar_transicao(instance, estado_anterior, instance.estado, request.user)
 
+        campos_depois = _serializar_campos_auditaveis(instance)
+        campos_alterados = {
+            k for k in campos_antes if campos_antes[k] != campos_depois[k]
+        }
+        responsavel_mudou = 'responsavel' in campos_alterados
+
+        if campos_alterados and not (responsavel_mudou and len(campos_alterados) == 1):
+            _registrar_auditoria(
+                instance, request.user, 'atualizacao',
+                anteriores=campos_antes, novos=campos_depois,
+            )
+
+        if responsavel_mudou:
+            justificativa = ''
+            if hasattr(data, 'get'):
+                justificativa = data.get('justificativa_responsavel', '') or ''
+            _registrar_auditoria(
+                instance, request.user, 'reassignacao_responsavel',
+                anteriores={'responsavel': campos_antes['responsavel']},
+                novos={'responsavel': campos_depois['responsavel']},
+                justificativa=str(justificativa),
+            )
+
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
@@ -180,7 +246,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if tarefa.estado != 'concluido':
             return Response(
-                {'detail': 'Apenas tarefas na colecao "Concluido" podem ser reabertas.'},
+                {'detail': 'Apenas tarefas na coleção "Concluído" podem ser reabertas.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -189,13 +255,13 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if destino not in ['a_fazer', 'em_andamento']:
             return Response(
-                {'detail': 'Destino invalido. Escolha "A fazer" ou "Em andamento".'},
+                {'detail': 'Destino inválido. Escolha "A fazer" ou "Em andamento".'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not justificativa:
             return Response(
-                {'detail': 'A justificativa e obrigatoria para reabrir a tarefa.'},
+                {'detail': 'A justificativa é obrigatória para reabrir a tarefa.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -207,12 +273,21 @@ class TarefaViewSet(viewsets.ModelViewSet):
             )
 
         origem = tarefa.estado
+        campos_antes = _serializar_campos_auditaveis(tarefa)
+
         tarefa.estado = destino
         tarefa.data_prevista = nova_data
         tarefa.data_conclusao = None
         tarefa.save(update_fields=['estado', 'data_prevista', 'data_conclusao'])
 
         self._registrar_transicao(tarefa, origem, destino, request.user, justificativa)
+
+        _registrar_auditoria(
+            tarefa, request.user, 'reabertura',
+            anteriores=campos_antes,
+            novos=_serializar_campos_auditaveis(tarefa),
+            justificativa=justificativa,
+        )
 
         serializer = self.get_serializer(tarefa)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -242,7 +317,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
         try:
             validar_pdf(arquivo)
         except ValidationError as exc:
-            msg = exc.messages[0] if getattr(exc, 'messages', None) else 'Arquivo invalido.'
+            msg = exc.messages[0] if getattr(exc, 'messages', None) else 'Arquivo inválido.'
             return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
         anexo = Anexo(
@@ -268,7 +343,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             anexo = tarefa.anexos.get(id=anexo_id)
         except Anexo.DoesNotExist:
             return Response(
-                {'detail': 'Anexo nao encontrado para esta tarefa.'},
+                {'detail': 'Anexo não encontrado para esta tarefa.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -292,7 +367,7 @@ class SubtarefaViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         if instance.tipo == 'resultado':
             return Response(
-                {'detail': 'Subtarefas do tipo resultado nao podem ser excluidas.'},
+                {'detail': 'Subtarefas do tipo resultado não podem ser excluídas.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().destroy(request, *args, **kwargs)

@@ -339,4 +339,62 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
       expect(screen.getByText('Venda - Maria')).toBeInTheDocument();
     });
   });
+
+// ======================================================================= v0.9.0
+test('v0.9.0: botão "..." expõe a opção "Trilha de auditoria"', async () => {
+  const tarefaComAuditoria = {
+    ...mockedTask,
+    auditorias: [
+      {
+        id: 'au1',
+        tipo_modificacao: 'criacao',
+        tipo_display: 'Criação',
+        entidade: 'tarefa',
+        entidade_id: 1,
+        usuario: 1,
+        usuario_nome: 'Carlos Vendedor',
+        dados_anteriores: {},
+        dados_novos: { estado: 'pendencias' },
+        justificativa: '',
+        data_hora: '2026-10-01T10:00:00Z',
+      },
+    ],
+  };
+  kanbanApi.getTarefas.mockResolvedValueOnce({ data: [tarefaComAuditoria] });
+
+  render(<KanbanBoard />);
+  await waitFor(() => {
+    expect(screen.getByText('Orçamento - João da Silva')).toBeInTheDocument();
+  });
+  fireEvent.click(screen.getByText('Orçamento - João da Silva'));
+
+  fireEvent.click(screen.getByRole('button', { name: /Mais ações/i }));
+  const itemAuditoria = screen.getByRole('menuitem', { name: /Trilha de auditoria/i });
+  expect(itemAuditoria).toBeInTheDocument();
+
+  fireEvent.click(itemAuditoria);
+  const dialog = screen.getByRole('dialog', { name: 'Trilha de Auditoria' });
+  expect(dialog).toBeInTheDocument();
+  expect(within(dialog).getByText('Criação')).toBeInTheDocument();
+});
+
+test('v0.9.0: trilha de auditoria mostra mensagem quando vazia', async () => {
+  kanbanApi.getTarefas.mockResolvedValueOnce({
+    data: [{ ...mockedTask, auditorias: [] }],
+  });
+
+  render(<KanbanBoard />);
+  await waitFor(() => {
+    expect(screen.getByText('Orçamento - João da Silva')).toBeInTheDocument();
+  });
+  fireEvent.click(screen.getByText('Orçamento - João da Silva'));
+
+  fireEvent.click(screen.getByRole('button', { name: /Mais ações/i }));
+  fireEvent.click(screen.getByRole('menuitem', { name: /Trilha de auditoria/i }));
+
+  expect(
+    screen.getByText(/Nenhum registro de auditoria para esta tarefa/i)
+  ).toBeInTheDocument();
+});
+
 });

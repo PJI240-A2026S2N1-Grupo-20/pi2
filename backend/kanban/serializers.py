@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from .models import Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa, Transicao, Anexo
+from .models import (
+    Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa, Transicao, Anexo, Auditoria
+)
 from accounts.models import Usuario
 
 
@@ -74,6 +76,22 @@ class TransicaoSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class AuditoriaSerializer(serializers.ModelSerializer):
+    usuario_nome = serializers.ReadOnlyField(source='usuario.username', default=None)
+    tipo_display = serializers.CharField(
+        source='get_tipo_modificacao_display', read_only=True
+    )
+
+    class Meta:
+        model = Auditoria
+        fields = [
+            'id', 'tipo_modificacao', 'tipo_display', 'entidade', 'entidade_id',
+            'usuario', 'usuario_nome', 'dados_anteriores', 'dados_novos',
+            'justificativa', 'data_hora',
+        ]
+        read_only_fields = fields
+
+
 class AnexoSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
 
@@ -98,6 +116,7 @@ class AnexoSerializer(serializers.ModelSerializer):
 class TarefaSerializer(serializers.ModelSerializer):
     subtarefas = SubtarefaSerializer(many=True, read_only=True)
     transicoes = TransicaoSerializer(many=True, read_only=True)
+    auditorias = AuditoriaSerializer(many=True, read_only=True)
     anexos = AnexoSerializer(many=True, read_only=True)
     fluxo_nome = serializers.ReadOnlyField(source='fluxo.nome', default=None)
     contato_nome = serializers.ReadOnlyField(source='contato.nome_exibicao', default=None)
@@ -115,17 +134,20 @@ class TarefaSerializer(serializers.ModelSerializer):
             'contato_email', 'contato_telefone',
             'responsavel', 'responsavel_nome', 'estado', 'data_prevista',
             'data_real_inicio', 'data_conclusao',
-            'observacoes', 'subtarefas', 'transicoes', 'anexos',
+            'observacoes', 'subtarefas', 'transicoes', 'auditorias', 'anexos',
             'criado_em', 'atualizado_em',
         ]
-        read_only_fields = ['criado_por', 'criado_em', 'atualizado_em', 'data_real_inicio', 'data_conclusao']
+        read_only_fields = [
+            'criado_por', 'criado_em', 'atualizado_em',
+            'data_real_inicio', 'data_conclusao',
+        ]
 
     def get_responsavel_nome(self, obj):
         if obj.responsavel:
             return obj.responsavel.username
         if obj.criado_por:
             return obj.criado_por.username
-        return 'Sem responsavel'
+        return 'Sem responsável'
 
     def get_contato_email(self, obj):
         return obj.contato.email if obj.contato else ''
@@ -144,12 +166,12 @@ class TarefaSerializer(serializers.ModelSerializer):
         if self.instance is None:
             if value is not None and value.id != request.user.id:
                 raise serializers.ValidationError(
-                    "Apenas Subgerentes, Gerentes ou Administradores podem atribuir outro responsavel."
+                    "Apenas Subgerentes, Gerentes ou Administradores podem atribuir outro responsável."
                 )
         else:
             novo_id = value.id if value else None
             if novo_id != self.instance.responsavel_id:
                 raise serializers.ValidationError(
-                    "Apenas Subgerentes, Gerentes ou Administradores podem reatribuir o responsavel."
+                    "Apenas Subgerentes, Gerentes ou Administradores podem reatribuir o responsável."
                 )
         return value

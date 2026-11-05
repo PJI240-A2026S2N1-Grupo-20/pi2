@@ -18,6 +18,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const [selectedContato, setSelectedContato] = useState(task?.contato ? String(task.contato) : '');
   const [contactSearch, setContactSearch] = useState('');
   const [selectedResponsavel, setSelectedResponsavel] = useState(task?.responsavel ? String(task.responsavel) : '');
+  const [justificativaResponsavel, setJustificativaResponsavel] = useState('');
   const [dataPrevista, setDataPrevista] = useState(task?.data_prevista || '');
   const [observacoes, setObservacoes] = useState(task?.observacoes || '');
   const [error, setError] = useState('');
@@ -27,6 +28,10 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const [contactError, setContactError] = useState('');
   const [arquivosPendentes, setArquivosPendentes] = useState([]);
   const [tarefaCriada, setTarefaCriada] = useState(null);
+
+  const originalResponsavelId = task?.responsavel ? String(task.responsavel) : '';
+  const responsavelAlterado =
+    Boolean(task) && canAssign && selectedResponsavel !== originalResponsavelId;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -64,7 +69,6 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
       );
     });
 
-    // Garante que o contato atualmente selecionado permaneça disponível
     if (selectedContato && !found.some((c) => String(c.id) === String(selectedContato))) {
       const sel = contatos.find((c) => String(c.id) === String(selectedContato));
       if (sel) found.unshift(sel);
@@ -72,8 +76,6 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
     return found;
   }, [contactSearch, contatos, selectedContato]);
 
-  // Enter no campo de busca NÃO deve submeter o form.
-  // Se houver exatamente um resultado, auto-seleciona para economizar um clique.
   const handleSearchKeyDown = (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
@@ -129,6 +131,9 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
       }
 
       if (task) {
+        if (responsavelAlterado) {
+          payload.justificativa_responsavel = justificativaResponsavel.trim();
+        }
         if (dataPrevista) {
           if (task.estado === 'pendencias') {
             payload.estado = 'a_fazer';
@@ -154,7 +159,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
             setTarefaCriada(novaTarefa);
             setArquivosPendentes([]);
             setError(
-              'Tarefa criada, mas nao foi possivel enviar: ' +
+              'Tarefa criada, mas não foi possível enviar: ' +
                 falhas.join(', ') +
                 '. Feche e abra a tarefa em Editar para tentar novamente.'
             );
@@ -497,6 +502,41 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 </div>
               )}
             </div>
+
+            {responsavelAlterado && (
+              <div style={{ marginBottom: '1rem' }}>
+                <label
+                  htmlFor="task-justificativa-responsavel"
+                  style={{
+                    display: 'block',
+                    fontSize: '0.85rem',
+                    fontWeight: '500',
+                    marginBottom: '0.35rem',
+                    color: '#374151',
+                  }}
+                >
+                  Justificativa da reatribuição (opcional)
+                </label>
+                <textarea
+                  id="task-justificativa-responsavel"
+                  rows={2}
+                  value={justificativaResponsavel}
+                  onChange={(e) => setJustificativaResponsavel(e.target.value)}
+                  placeholder="Motivo da mudança de responsável..."
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    fontSize: '16px',
+                    resize: 'vertical',
+                  }}
+                />
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                  Este texto é registrado na trilha de auditoria da tarefa.
+                </div>
+              </div>
+            )}
 
             <div style={{ marginBottom: '1rem' }}>
               <label
