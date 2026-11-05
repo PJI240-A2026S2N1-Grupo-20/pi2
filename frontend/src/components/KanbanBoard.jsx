@@ -1,22 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { KanbanColumn } from './KanbanColumn';
 import { TaskModal } from './TaskModal';
 import { ConfirmTransitionModal } from './ConfirmTransitionModal';
-import { sortTasksChronologically } from '../utils/kanbanUtils';
+import { FilterBar } from './FilterBar';
+import {
+  sortTasksChronologically,
+  getDelayInfo,
+  DELAY_STATUS,
+} from '../utils/kanbanUtils';
 import * as kanbanApi from '../api/kanbanApi';
 import { Plus } from 'lucide-react';
 
 const COLLECTIONS = [
-  { id: 'pendencias', title: 'Pendências', color: '#6b7280' },
+  { id: 'pendencias', title: 'Pendencias', color: '#6b7280' },
   { id: 'a_fazer', title: 'A fazer', color: '#f59e0b' },
   { id: 'em_andamento', title: 'Em andamento', color: '#3b82f6' },
-  { id: 'concluido', title: 'Concluído', color: '#10b981' },
+  { id: 'concluido', title: 'Concluido', color: '#10b981' },
 ];
+
+const EMPTY_FILTERS = { search: '', fluxo: '', responsavel: '', situacao: '' };
 
 export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
   const [tasks, setTasks] = useState([]);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [feedbackMsg, setFeedbackMsg] = useState('');
+
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [fluxos, setFluxos] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
 
   const [activeCollection, setActiveCollection] = useState(() => {
     return localStorage.getItem('eletrokanban_active_collection') || 'pendencias';
@@ -38,12 +49,25 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
       const response = await kanbanApi.getTarefas();
       setTasks(sortTasksChronologically(response.data));
     } catch (err) {
-      showFeedback("Erro de conexão: Não foi possível carregar as tarefas do servidor.");
+      showFeedback("Erro de conexao: Nao foi possivel carregar as tarefas do servidor.");
       setTasks([]);
     }
   };
 
-  useEffect(() => { fetchTasks(); }, []);
+  const fetchFilterOptions = async () => {
+    try {
+      const [resFluxos, resUsuarios] = await Promise.all([
+        kanbanApi.getFluxos(),
+        kanbanApi.getUsuarios(),
+      ]);
+      setFluxos(resFluxos.data || []);
+      setUsuarios(resUsuarios.data || []);
+    } catch (err) {
+      /* silencioso: filtros opcionais */
+    }
+  };
+
+  useEffect(() => { fetchTasks(); fetchFilterOptions(); }, []);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -63,6 +87,60 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
     }
   }, [expandedTaskId]);
 
+  // Sincroniza a referencia de taskToEdit quando as tarefas sao recarregadas.
+  useEffect(() => {
+    if (!isModalOpen || !taskToEdit) return;
+    const fresh = tasks.find((t) => String(t.id) === String(taskToEdit.id));
+    if (fresh && fresh !== taskToEdit) {
+      setTaskToEdit(fresh);
+    }
+  }, [tasks, isModalOpen, taskToEdit]);
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      if (filters.search && filters.search.trim()) {
+        const term = filters.search.trim().toLowerCase();
+        const haystack = [
+          t.fluxo_nome,
+          t.contato_nome,
+          t.observacoes,
+          t.contato_email,
+          t.contato_telefone,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+
+      if (filters.fluxo && String(t.fluxo || '') !== String(filters.fluxo)) {
+        return false;
+      }
+      if (
+        filters.responsavel &&
+        String(t.responsavel || '') !== String(filters.responsavel)
+      ) {
+        return false;
+      }
+
+      if (filters.situacao) {
+        const info = getDelayInfo(t, limiares);
+        const atrasada = info.daysUntil !== null && info.daysUntil < 0;
+        if (filters.situacao === 'atrasadas' && !atrasada) return false;
+        if (filters.situacao === 'alerta') {
+          if (info.status === DELAY_STATUS.none) return false;
+          if (info.status === DELAY_STATUS.normal) return false;
+          if (atrasada) return false;
+        }
+        if (filters.situacao === 'normais' && info.status !== DELAY_STATUS.normal) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [tasks, filters, limiares]);
+
   const handleToggleExpand = (taskId) => {
     setExpandedTaskId((prevId) => (String(prevId) === String(taskId) ? null : taskId));
   };
@@ -77,12 +155,12 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
     setIsModalOpen(true);
   };
 
-  // ---------------------------------------------------------- transições
   const executeMove = async (taskId, novoEstado, extraPayload = {}) => {
     const task = tasks.find((t) => String(t.id) === String(taskId));
     if (!task) return;
     const snapshot = { estado: task.estado, data_prevista: task.data_prevista };
 
+    // Atualizacao otimista (UI responde de imediato)
     setTasks((prev) =>
       prev.map((t) =>
         String(t.id) === String(taskId)
@@ -92,12 +170,28 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
     );
 
     try {
-      await kanbanApi.updateTask(taskId, { estado: novoEstado, ...extraPayload });
+      const response = await kanbanApi.updateTask(taskId, {
+        estado: novoEstado,
+        ...extraPayload,
+      });
+
+      // Correcao do bug: o backend retorna a tarefa completa (com transicoes,
+      // subtarefas e anexos). Substituimos o objeto local por essa versao para
+      // que o historico de transicoes se mantenha atualizado em toda movimentacao.
+      if (response?.data?.id) {
+        setTasks((prev) =>
+          prev.map((t) =>
+            String(t.id) === String(taskId) ? { ...t, ...response.data } : t
+          )
+        );
+      } else {
+        await fetchTasks();
+      }
     } catch (err) {
       setTasks((prev) =>
         prev.map((t) => (String(t.id) === String(taskId) ? { ...t, ...snapshot } : t))
       );
-      const detail = err.response?.data?.detail || "Erro no servidor ao atualizar a coleção.";
+      const detail = err.response?.data?.detail || "Erro no servidor ao atualizar a colecao.";
       showFeedback(detail);
     }
   };
@@ -107,29 +201,25 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
     if (!task) return;
     if (task.estado === novoEstado) return;
 
-    // Reabertura: tarefa em Concluído
     if (task.estado === 'concluido') {
       if (novoEstado === 'pendencias') {
-        showFeedback("Ação negada: Reabra a tarefa para 'A fazer' ou 'Em andamento'.");
+        showFeedback("Acao negada: Reabra a tarefa para 'A fazer' ou 'Em andamento'.");
         return;
       }
       setPendingTransition({ type: 'reabrir', task, destino: novoEstado });
       return;
     }
 
-    // Data obrigatória em A fazer / Em andamento (RN-09): abre popup para definir
     if (['a_fazer', 'em_andamento'].includes(novoEstado) && !task.data_prevista) {
       setPendingTransition({ type: 'definir_data', task, destino: novoEstado });
       return;
     }
 
-    // Concluir: popup obrigatório (RN-04 / RF-17)
     if (novoEstado === 'concluido') {
       setPendingTransition({ type: 'concluir', task, destino: novoEstado });
       return;
     }
 
-    // Voltar para Pendências (RN-04 / RF-15)
     if (novoEstado === 'pendencias' && ['a_fazer', 'em_andamento'].includes(task.estado)) {
       setPendingTransition({ type: 'voltar_pendencias', task, destino: novoEstado });
       return;
@@ -164,7 +254,7 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
         try {
           await kanbanApi.updateSubtarefa(resSub.id, {
             opcao_selecionada: payload.resultado,
-            concluida: payload.resultado === 'Concluída',
+            concluida: payload.resultado === 'Concluida',
           });
         } catch (err) {
           showFeedback(err.response?.data?.detail || "Erro ao registrar o resultado.");
@@ -175,13 +265,8 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
 
     const extra = pt.type === 'voltar_pendencias' ? { data_prevista: null } : {};
     await executeMove(pt.task.id, pt.destino, extra);
-
-    if (pt.type === 'concluir') {
-      await fetchTasks();
-    }
   };
 
-  // ---------------------------------------------------------- subtarefas
   const handleToggleSubtarefa = async (taskId, subId, currentConcluida) => {
     const newConcluida = !currentConcluida;
     setTasks((prev) =>
@@ -203,7 +288,7 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
   };
 
   const handleUpdateSubtarefaOption = async (taskId, subId, optionValue) => {
-    const isDone = optionValue === 'Concluída';
+    const isDone = optionValue === 'Concluida';
     setTasks((prev) =>
       prev.map((t) => {
         if (String(t.id) !== String(taskId)) return t;
@@ -283,7 +368,8 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
     }
   };
 
-  // ---------------------------------------------------------- render
+  const columnTasks = (colId) => filteredTasks.filter((t) => t.estado === colId);
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
@@ -300,11 +386,19 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
         </button>
       </div>
 
+      <FilterBar
+        filters={filters}
+        onChange={setFilters}
+        onClear={() => setFilters(EMPTY_FILTERS)}
+        fluxos={fluxos}
+        usuarios={usuarios}
+      />
+
       {isMobile ? (
         <div>
           <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem', overflowX: 'auto' }}>
             {COLLECTIONS.map((col) => {
-              const count = tasks.filter((t) => t.estado === col.id).length;
+              const count = columnTasks(col.id).length;
               const isActive = activeCollection === col.id;
               return (
                 <button
@@ -324,7 +418,7 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
           </div>
           <KanbanColumn
             collection={COLLECTIONS.find((c) => c.id === activeCollection)}
-            tasks={tasks.filter((t) => t.estado === activeCollection)}
+            tasks={columnTasks(activeCollection)}
             expandedTaskId={expandedTaskId}
             onToggleExpand={handleToggleExpand}
             onMoveTask={handleMoveTask}
@@ -345,7 +439,7 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
             <KanbanColumn
               key={col.id}
               collection={col}
-              tasks={tasks.filter((t) => t.estado === col.id)}
+              tasks={columnTasks(col.id)}
               expandedTaskId={expandedTaskId}
               onToggleExpand={handleToggleExpand}
               onMoveTask={handleMoveTask}
@@ -357,7 +451,7 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
               onEditTask={handleOpenEditModal}
               onReopenTask={(task) => setPendingTransition({ type: 'reabrir', task })}
               collections={COLLECTIONS}
-            limiares={limiares}
+              limiares={limiares}
             />
           ))}
         </div>

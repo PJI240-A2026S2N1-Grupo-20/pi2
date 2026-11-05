@@ -3,6 +3,7 @@ import * as kanbanApi from '../api/kanbanApi';
 import { useAuth } from '../context/AuthContext';
 import { X, Plus, Search } from 'lucide-react';
 import { DatePickerBR } from './DatePickerBR';
+import { AnexoManager } from './AnexoManager';
 
 export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const { user: currentUser } = useAuth();
@@ -526,6 +527,12 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 }}
               />
             </div>
+
+            {task && (
+              <div style={{ marginBottom: '1.25rem' }}>
+                <AnexoManager tarefaId={task.id} initialAnexos={task.anexos || []} />
+              </div>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
               <button

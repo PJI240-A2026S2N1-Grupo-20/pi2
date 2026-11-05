@@ -1,19 +1,21 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from .models import Contato, Fluxo, Tarefa, Subtarefa, Transicao
+from .models import Contato, Fluxo, Tarefa, Subtarefa, Transicao, Anexo, validar_pdf
 from .serializers import (
     ContatoSerializer,
     FluxoSerializer,
     TarefaSerializer,
     SubtarefaSerializer,
+    AnexoSerializer,
 )
 from accounts.permissions import IsAdministrador
 
 
-# RN-01: matriz de transições (validada no servidor)
 TRANSICOES_PERMITIDAS = {
     'pendencias': {'a_fazer'},
     'a_fazer': {'pendencias', 'em_andamento', 'concluido'},
@@ -47,11 +49,10 @@ class TarefaViewSet(viewsets.ModelViewSet):
             Tarefa.objects
             .filter(deletado=False)
             .select_related('fluxo', 'contato', 'responsavel', 'criado_por')
-            .prefetch_related('subtarefas', 'transicoes')
+            .prefetch_related('subtarefas', 'transicoes', 'anexos')
             .order_by('criado_em')
         )
 
-    # ---------------------------------------------------------------- helpers
     def _registrar_transicao(self, tarefa, origem, destino, usuario, justificativa=''):
         if origem == destino:
             return
@@ -66,7 +67,6 @@ class TarefaViewSet(viewsets.ModelViewSet):
             resultado_snapshot=snapshot,
         )
 
-    # ---------------------------------------------------------------- create
     def perform_create(self, serializer):
         estado = 'a_fazer' if serializer.validated_data.get('data_prevista') else 'pendencias'
         responsavel = serializer.validated_data.get('responsavel') or self.request.user
@@ -86,30 +86,27 @@ class TarefaViewSet(viewsets.ModelViewSet):
                     ordem_count += 1
                 Subtarefa.objects.create(
                     tarefa=tarefa,
-                    texto='Resultado [Concluída | Cancelada]',
+                    texto='Resultado [Concluida | Cancelada]',
                     ordem=ordem_count,
                     tipo='resultado'
                 )
             else:
                 Subtarefa.objects.create(
                     tarefa=tarefa,
-                    texto='Resultado [Concluída | Cancelada]',
+                    texto='Resultado [Concluida | Cancelada]',
                     ordem=1,
                     tipo='resultado'
                 )
 
-    # ---------------------------------------------------------------- update
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         data = request.data
         estado_anterior = instance.estado
 
-        # RF-15: se a data prevista for removida, a tarefa retorna para Pendências
         data_removida = 'data_prevista' in data and not data.get('data_prevista')
         novo_estado = data.get('estado', instance.estado)
 
-        # RN-01: mover A fazer / Em andamento -> Pendências força remoção da data
         if (
             'estado' in data
             and data.get('estado') == 'pendencias'
@@ -130,12 +127,11 @@ class TarefaViewSet(viewsets.ModelViewSet):
                 data._mutable = True
                 data['estado'] = 'pendencias'
 
-        # RN-01: matriz de transições
         if novo_estado != instance.estado:
             permitidas = TRANSICOES_PERMITIDAS.get(instance.estado, set())
             if novo_estado not in permitidas:
                 return Response(
-                    {'detail': "Movimentação não permitida entre estas coleções."},
+                    {'detail': "Movimentacao nao permitida entre estas colecoes."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -143,7 +139,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if novo_estado in ['a_fazer', 'em_andamento'] and not data_prevista:
             return Response(
-                {'detail': "Tarefas nas coleções 'A fazer' ou 'Em andamento' exigem uma Data Prevista."},
+                {'detail': "Tarefas nas colecoes 'A fazer' ou 'Em andamento' exigem uma Data Prevista."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -151,7 +147,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             res_sub = instance.subtarefas.filter(tipo='resultado').first()
             if res_sub and not res_sub.opcao_selecionada and not res_sub.concluida:
                 return Response(
-                    {'detail': "A tarefa só pode ser concluída com o preenchimento da subtarefa de Resultado."},
+                    {'detail': "A tarefa so pode ser concluida com o preenchimento da subtarefa de Resultado."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -162,7 +158,6 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         instance.refresh_from_db()
 
-        # RN-05 / RN-06: datas de ciclo
         changed_fields = []
         if instance.estado == 'em_andamento' and not instance.data_real_inicio:
             instance.data_real_inicio = timezone.now()
@@ -173,22 +168,19 @@ class TarefaViewSet(viewsets.ModelViewSet):
         if changed_fields:
             instance.save(update_fields=changed_fields)
 
-        # RF-29: registrar transição
         if instance.estado != estado_anterior:
             self._registrar_transicao(instance, estado_anterior, instance.estado, request.user)
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
-    # ---------------------------------------------------------------- reopen
     @action(detail=True, methods=['post'], url_path='reabrir')
     def reabrir(self, request, pk=None):
-        """RF-19 + RN-03 + RN-06: reabre tarefa concluída com justificativa obrigatória."""
         tarefa = self.get_object()
 
         if tarefa.estado != 'concluido':
             return Response(
-                {'detail': 'Apenas tarefas na coleção "Concluído" podem ser reabertas.'},
+                {'detail': 'Apenas tarefas na colecao "Concluido" podem ser reabertas.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -197,13 +189,13 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if destino not in ['a_fazer', 'em_andamento']:
             return Response(
-                {'detail': 'Destino inválido. Escolha "A fazer" ou "Em andamento".'},
+                {'detail': 'Destino invalido. Escolha "A fazer" ou "Em andamento".'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not justificativa:
             return Response(
-                {'detail': 'A justificativa é obrigatória para reabrir a tarefa.'},
+                {'detail': 'A justificativa e obrigatoria para reabrir a tarefa.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -217,13 +209,72 @@ class TarefaViewSet(viewsets.ModelViewSet):
         origem = tarefa.estado
         tarefa.estado = destino
         tarefa.data_prevista = nova_data
-        tarefa.data_conclusao = None  # RN-06: preserva histórico, limpa ciclo atual
+        tarefa.data_conclusao = None
         tarefa.save(update_fields=['estado', 'data_prevista', 'data_conclusao'])
 
         self._registrar_transicao(tarefa, origem, destino, request.user, justificativa)
 
         serializer = self.get_serializer(tarefa)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='anexos',
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def upload_anexo(self, request, pk=None):
+        tarefa = self.get_object()
+        arquivo = request.FILES.get('arquivo')
+
+        if not arquivo:
+            return Response(
+                {'detail': 'Nenhum arquivo enviado.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if tarefa.anexos.count() >= 20:
+            return Response(
+                {'detail': 'Limite de 20 anexos por tarefa atingido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validar_pdf(arquivo)
+        except ValidationError as exc:
+            msg = exc.messages[0] if getattr(exc, 'messages', None) else 'Arquivo invalido.'
+            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+
+        anexo = Anexo(
+            tarefa=tarefa,
+            arquivo=arquivo,
+            nome=arquivo.name,
+            tamanho=arquivo.size,
+        )
+        try:
+            anexo.full_clean()
+            anexo.save()
+        except ValidationError as exc:
+            msg = exc.messages[0] if getattr(exc, 'messages', None) else 'Falha ao salvar anexo.'
+            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = AnexoSerializer(anexo, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['delete'], url_path=r'anexos/(?P<anexo_id>\d+)')
+    def delete_anexo(self, request, pk=None, anexo_id=None):
+        tarefa = self.get_object()
+        try:
+            anexo = tarefa.anexos.get(id=anexo_id)
+        except Anexo.DoesNotExist:
+            return Response(
+                {'detail': 'Anexo nao encontrado para esta tarefa.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        anexo.arquivo.delete(save=False)
+        anexo.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class SubtarefaViewSet(viewsets.ModelViewSet):
@@ -241,7 +292,7 @@ class SubtarefaViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         if instance.tipo == 'resultado':
             return Response(
-                {'detail': 'Subtarefas do tipo resultado não podem ser excluídas.'},
+                {'detail': 'Subtarefas do tipo resultado nao podem ser excluidas.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().destroy(request, *args, **kwargs)

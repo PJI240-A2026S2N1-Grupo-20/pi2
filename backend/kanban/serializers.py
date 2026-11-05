@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa, Transicao
+from .models import Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa, Transicao, Anexo
 from accounts.models import Usuario
 
 
@@ -74,21 +74,49 @@ class TransicaoSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class AnexoSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Anexo
+        fields = ['id', 'nome', 'tamanho', 'url', 'enviado_em']
+        read_only_fields = ['id', 'nome', 'tamanho', 'url', 'enviado_em']
+
+    def get_url(self, obj):
+        if not obj.arquivo:
+            return None
+        request = self.context.get('request')
+        try:
+            url = obj.arquivo.url
+        except ValueError:
+            return None
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+
 class TarefaSerializer(serializers.ModelSerializer):
     subtarefas = SubtarefaSerializer(many=True, read_only=True)
     transicoes = TransicaoSerializer(many=True, read_only=True)
+    anexos = AnexoSerializer(many=True, read_only=True)
     fluxo_nome = serializers.ReadOnlyField(source='fluxo.nome', default=None)
     contato_nome = serializers.ReadOnlyField(source='contato.nome_exibicao', default=None)
-    responsavel = serializers.PrimaryKeyRelatedField(queryset=Usuario.objects.all(), required=False, allow_null=True)
+    contato_email = serializers.SerializerMethodField()
+    contato_telefone = serializers.SerializerMethodField()
+    responsavel = serializers.PrimaryKeyRelatedField(
+        queryset=Usuario.objects.all(), required=False, allow_null=True
+    )
     responsavel_nome = serializers.SerializerMethodField()
 
     class Meta:
         model = Tarefa
         fields = [
             'id', 'fluxo', 'fluxo_nome', 'contato', 'contato_nome',
+            'contato_email', 'contato_telefone',
             'responsavel', 'responsavel_nome', 'estado', 'data_prevista',
             'data_real_inicio', 'data_conclusao',
-            'observacoes', 'subtarefas', 'transicoes', 'criado_em', 'atualizado_em'
+            'observacoes', 'subtarefas', 'transicoes', 'anexos',
+            'criado_em', 'atualizado_em',
         ]
         read_only_fields = ['criado_por', 'criado_em', 'atualizado_em', 'data_real_inicio', 'data_conclusao']
 
@@ -97,10 +125,15 @@ class TarefaSerializer(serializers.ModelSerializer):
             return obj.responsavel.username
         if obj.criado_por:
             return obj.criado_por.username
-        return 'Sem responsável'
+        return 'Sem responsavel'
+
+    def get_contato_email(self, obj):
+        return obj.contato.email if obj.contato else ''
+
+    def get_contato_telefone(self, obj):
+        return obj.contato.telefone if obj.contato else ''
 
     def validate_responsavel(self, value):
-        """RN-02: apenas Subgerente/Gerente/Administrador podem reatribuir o responsável."""
         request = self.context.get('request')
         if not request or not request.user or not request.user.is_authenticated:
             return value
@@ -111,12 +144,12 @@ class TarefaSerializer(serializers.ModelSerializer):
         if self.instance is None:
             if value is not None and value.id != request.user.id:
                 raise serializers.ValidationError(
-                    "Apenas Subgerentes, Gerentes ou Administradores podem atribuir outro responsável."
+                    "Apenas Subgerentes, Gerentes ou Administradores podem atribuir outro responsavel."
                 )
         else:
             novo_id = value.id if value else None
             if novo_id != self.instance.responsavel_id:
                 raise serializers.ValidationError(
-                    "Apenas Subgerentes, Gerentes ou Administradores podem reatribuir o responsável."
+                    "Apenas Subgerentes, Gerentes ou Administradores podem reatribuir o responsavel."
                 )
         return value

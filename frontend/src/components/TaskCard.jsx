@@ -8,7 +8,14 @@ import {
   ChevronDown, ChevronUp, MoveRight, User, Calendar,
   FileText, Plus, MoreHorizontal, Check, X, Edit2,
   RotateCcw, History, AlertTriangle, Clock,
+  MessageCircle, Mail, Paperclip,
 } from 'lucide-react';
+
+function toWhatsAppNumber(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length >= 12 ? digits : `55${digits}`;
+}
 
 export const TaskCard = ({
   task,
@@ -200,6 +207,53 @@ export const TaskCard = ({
 
       {isExpanded && (
         <div style={{ marginTop: '0.875rem', paddingTop: '0.75rem', borderTop: '1px dashed #e5e7eb', fontSize: '0.85rem' }}>
+          {(task.contato_telefone || task.contato_email || (task.anexos && task.anexos.length > 0)) && (
+            <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              {task.contato_telefone && (
+                <a
+                  href={`https://wa.me/${toWhatsAppNumber(task.contato_telefone)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                    backgroundColor: '#dcfce7', color: '#166534',
+                    border: '1px solid #bbf7d0', borderRadius: '4px',
+                    padding: '0.2rem 0.5rem', fontSize: '0.75rem',
+                    fontWeight: '600', textDecoration: 'none',
+                  }}
+                >
+                  <MessageCircle size={12} /> WhatsApp
+                </a>
+              )}
+              {task.contato_email && (
+                <a
+                  href={`mailto:${task.contato_email}`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                    backgroundColor: '#dbeafe', color: '#1e40af',
+                    border: '1px solid #bfdbfe', borderRadius: '4px',
+                    padding: '0.2rem 0.5rem', fontSize: '0.75rem',
+                    fontWeight: '600', textDecoration: 'none',
+                  }}
+                >
+                  <Mail size={12} /> E-mail
+                </a>
+              )}
+              {task.anexos && task.anexos.length > 0 && (
+                <span
+                  aria-label={`${task.anexos.length} anexo(s) em PDF`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.2rem',
+                    backgroundColor: '#f3f4f6', color: '#4b5563',
+                    border: '1px solid #e5e7eb', borderRadius: '4px',
+                    padding: '0.2rem 0.5rem', fontSize: '0.75rem', fontWeight: '600',
+                  }}
+                >
+                  <Paperclip size={12} /> {task.anexos.length}
+                </span>
+              )}
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.35rem' }}>
             {task.data_prevista ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#374151', flexWrap: 'wrap' }}>
@@ -366,6 +420,7 @@ export const TaskCard = ({
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
                             <span style={{ fontWeight: '500', color: '#1f2937' }}>Resultado:</span>
                             <select
+                              aria-label="Selecionar resultado da tarefa"
                               value={sub.opcao_selecionada || ''}
                               onChange={(e) => onUpdateSubtarefaOption(task.id, sub.id, e.target.value)}
                               style={{ padding: '0.2rem 0.4rem', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.8rem', backgroundColor: '#fff' }}

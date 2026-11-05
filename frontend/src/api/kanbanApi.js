@@ -19,3 +19,14 @@ export const updateSubtarefa = (id, data) => api.patch(`/kanban/subtarefas/${id}
 export const deleteSubtarefa = (id) => api.delete(`/kanban/subtarefas/${id}/`);
 
 export const getUsuarios = () => api.get('/auth/usuarios/');
+
+export const uploadAnexo = (tarefaId, file) => {
+  const formData = new FormData();
+  formData.append('arquivo', file);
+  return api.post(`/kanban/tarefas/${tarefaId}/anexos/`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+export const deleteAnexo = (tarefaId, anexoId) =>
+  api.delete(`/kanban/tarefas/${tarefaId}/anexos/${anexoId}/`);
