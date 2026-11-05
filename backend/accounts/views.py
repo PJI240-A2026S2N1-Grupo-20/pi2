@@ -9,7 +9,6 @@ from .serializers import (
     UsuarioSerializer,
     UsuarioResumoSerializer,
     LoginSerializer,
-    PasswordResetRequestSerializer,
     ConfiguracaoSistemaSerializer,
 )
 from .permissions import IsAdministrador
@@ -70,18 +69,6 @@ class MeView(APIView):
             'user': user_data,
             'limiares': {'l1': l1, 'l2': l2}
         }, status=status.HTTP_200_OK)
-
-
-class PasswordResetRequestView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        serializer = PasswordResetRequestSerializer(data=request.data)
-        if serializer.is_valid():
-            return Response({
-                'detail': 'Se o e-mail estiver cadastrado no sistema, você receberá as instruções de redefinição.'
-            }, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ConfiguracaoSistemaView(APIView):

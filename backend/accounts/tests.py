@@ -56,15 +56,6 @@ class AccountsTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['limiar_amarelo_dias'], 3)
 
-    def test_privacidade_email_redefinicao_senha(self):
-        resp1 = self.client.post(reverse('password-reset'), {'email': 'vendedor@eletrokanban.com'})
-        self.assertEqual(resp1.status_code, status.HTTP_200_OK)
-        
-        resp2 = self.client.post(reverse('password-reset'), {'email': 'inexistente@eletrokanban.com'})
-        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
-        
-        self.assertEqual(resp1.data['detail'], resp2.data['detail'])
-
     def test_limiar_individual_prevalece_sobre_global(self):
         self.vendedor.limiar_amarelo_dias = 1
         self.vendedor.save()

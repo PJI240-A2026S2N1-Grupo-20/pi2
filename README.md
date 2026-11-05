@@ -1,4 +1,4 @@
-# EletroKanban: Sistema de Gestão de Negociações (v0.5.3)
+# EletroKanban: Sistema de Gestão de Negociações (v0.6.0)
 
 Aplicação web destinada ao gerenciamento de negociações, vendas, orçamentos e atividades do setor comercial com abordagem para dispositivos móveis, desenvolvida para o Projeto Integrador Univesp.
 7
@@ -42,3 +42,7 @@ npm run test
 
 ## Documentação da API
 Acesse `<IP_DO_SERVIDOR>:8000/api/docs/` no navegador para visualizar a documentação interativa Swagger/OpenAPI.
+
+## Redefinição de Senha
+
+A redefinição de senhas de usuários é realizada exclusivamente pela interface administrativa do Django, em `http://<IP_DO_SERVIDOR>:8000/admin/`, acessível apenas por administradores. Não há autoatendimento de redefinição no frontend da aplicação.

@@ -22,10 +22,6 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
 
-class PasswordResetRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-
-
 class ConfiguracaoSistemaSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConfiguracaoSistema
