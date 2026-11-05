@@ -38,7 +38,7 @@ export const DatePickerBR = ({ id, value, onChange, required, style }) => {
   const handleTextChange = (e) => {
     let rawVal = e.target.value;
 
-    // Suporte para valor ISO (ex: 2026-10-05) vindo de testes ou preenchimento programatico
+    // Suporte para valor ISO (ex: 2026-10-05) vindo de testes ou preenchimento programático
     if (/^\d{4}-\d{2}-\d{2}$/.test(rawVal)) {
       const [y, m, d] = rawVal.split('-');
       setDisplayValue(`${d}/${m}/${y}`);

@@ -579,7 +579,7 @@ export const TaskCard = ({
                       {' → '}
                       <strong>{ESTADO_LABEL[t.destino] || t.destino}</strong>
                       {t.usuario_nome && (
-                        <span style={{ color: '#6b7280' }}> · {t.usuario_nome}</span>
+                        <span style={{ color: '#6b7280' }}> - {t.usuario_nome}</span>
                       )}
                     </div>
                     {t.justificativa && (
