@@ -552,3 +552,124 @@ class KanbanBackendTestCase(TestCase):
         response = client.patch(url, {'nome': 'Joao da Silva'}, format='json')
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data['reason'], 'nome')
+
+    # ================================================================= v1.0.0
+    def test_rf31_metricas_calculam_totais_por_estado(self):
+        """RF-31: metricas devem refletir a contagem real por colecao."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        Tarefa.objects.create(contato=self.contato, criado_por=self.user)
+        Tarefa.objects.create(contato=self.contato, criado_por=self.user)
+        Tarefa.objects.create(
+            contato=self.contato,
+            criado_por=self.user,
+            data_prevista=date(2026, 10, 1),
+        )
+
+        url = reverse('metricas')
+        response = client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['totais_por_estado']['pendencias'], 2)
+        self.assertEqual(response.data['totais_por_estado']['a_fazer'], 1)
+        self.assertEqual(response.data['total'], 3)
+
+    def test_rf31_taxa_conclusao_considera_resultado(self):
+        """RF-31: taxa de conclusao desconsidera as tarefas canceladas."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        concluida = Tarefa.objects.create(
+            contato=self.contato,
+            criado_por=self.user,
+            data_prevista=date(2026, 10, 1),
+            estado='concluido',
+        )
+        sub = concluida.subtarefas.filter(tipo='resultado').first()
+        sub.opcao_selecionada = 'Concluída'
+        sub.concluida = True
+        sub.save()
+
+        cancelada = Tarefa.objects.create(
+            contato=self.contato,
+            criado_por=self.user,
+            data_prevista=date(2026, 10, 1),
+            estado='concluido',
+        )
+        sub2 = cancelada.subtarefas.filter(tipo='resultado').first()
+        sub2.opcao_selecionada = 'Cancelada'
+        sub2.concluida = False
+        sub2.save()
+
+        url = reverse('metricas')
+        response = client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['concluidas'], 1)
+        self.assertEqual(response.data['canceladas'], 1)
+        self.assertEqual(response.data['taxa_conclusao'], 50.0)
+
+    def test_rf31_metricas_filtram_periodo(self):
+        """RF-31: parametros data_inicio e data_fim limitam a contagem."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        antiga = Tarefa.objects.create(contato=self.contato, criado_por=self.user)
+        Tarefa.objects.filter(pk=antiga.pk).update(
+            criado_em=timezone.now() - timedelta(days=60)
+        )
+        Tarefa.objects.create(contato=self.contato, criado_por=self.user)
+
+        url = reverse('metricas')
+        response = client.get(url, {'data_inicio': timezone.localdate().isoformat()})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['total'], 1)
+
+    def test_rf31_metricas_requer_autenticacao(self):
+        """RF-31: endpoint de metricas exige autenticacao."""
+        client = APIClient()
+        url = reverse('metricas')
+        response = client.get(url)
+        self.assertIn(response.status_code, [401, 403])
+
+    def test_rf32_exportar_tarefas_csv(self):
+        """RF-32: exportacao de tarefas em CSV."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        Tarefa.objects.create(contato=self.contato, criado_por=self.user)
+
+        url = reverse('exportar-tarefas')
+        response = client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('text/csv', response['Content-Type'])
+        self.assertIn('attachment', response['Content-Disposition'])
+        corpo = response.content.decode('utf-8')
+        self.assertIn('titulo', corpo)
+        self.assertIn('estado', corpo)
+
+    def test_rf32_exportar_transicoes_csv(self):
+        """RF-32: exportacao do historico de transicoes em CSV."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        tarefa = Tarefa.objects.create(
+            contato=self.contato,
+            criado_por=self.user,
+            data_prevista=date(2026, 10, 1),
+        )
+
+        url_update = reverse('tarefa-detail', args=[tarefa.id])
+        client.patch(url_update, {'estado': 'em_andamento'}, format='json')
+
+        url = reverse('exportar-transicoes')
+        response = client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('text/csv', response['Content-Type'])
+        corpo = response.content.decode('utf-8')
+        self.assertIn('tarefa_id', corpo)
+        self.assertIn('em_andamento', corpo)
+
+    def test_rf32_exportar_requer_autenticacao(self):
+        """RF-32: os endpoints de exportacao exigem autenticacao."""
+        client = APIClient()
+        for nome in ('exportar-tarefas', 'exportar-transicoes'):
+            response = client.get(reverse(nome))
+            self.assertIn(response.status_code, [401, 403])

@@ -12,10 +12,10 @@ import * as kanbanApi from '../api/kanbanApi';
 import { Plus } from 'lucide-react';
 
 const COLLECTIONS = [
-  { id: 'pendencias', title: 'Pendencias', color: '#6b7280' },
+  { id: 'pendencias', title: 'Pendências', color: '#6b7280' },
   { id: 'a_fazer', title: 'A fazer', color: '#f59e0b' },
   { id: 'em_andamento', title: 'Em andamento', color: '#3b82f6' },
-  { id: 'concluido', title: 'Concluido', color: '#10b981' },
+  { id: 'concluido', title: 'Concluído', color: '#10b981' },
 ];
 
 const EMPTY_FILTERS = { search: '', fluxo: '', responsavel: '', situacao: '' };
@@ -49,7 +49,7 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
       const response = await kanbanApi.getTarefas();
       setTasks(sortTasksChronologically(response.data));
     } catch (err) {
-      showFeedback("Erro de conexao: Nao foi possivel carregar as tarefas do servidor.");
+      showFeedback("Erro de conexão: Não foi possível carregar as tarefas do servidor.");
       setTasks([]);
     }
   };
@@ -191,7 +191,7 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
       setTasks((prev) =>
         prev.map((t) => (String(t.id) === String(taskId) ? { ...t, ...snapshot } : t))
       );
-      const detail = err.response?.data?.detail || "Erro no servidor ao atualizar a colecao.";
+      const detail = err.response?.data?.detail || "Erro no servidor ao atualizar a coleção.";
       showFeedback(detail);
     }
   };
@@ -203,7 +203,7 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
 
     if (task.estado === 'concluido') {
       if (novoEstado === 'pendencias') {
-        showFeedback("Acao negada: Reabra a tarefa para 'A fazer' ou 'Em andamento'.");
+        showFeedback("Ação negada: Reabra a tarefa para 'A fazer' ou 'Em andamento'.");
         return;
       }
       setPendingTransition({ type: 'reabrir', task, destino: novoEstado });

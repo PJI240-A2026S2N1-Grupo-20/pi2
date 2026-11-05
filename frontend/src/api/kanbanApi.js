@@ -30,3 +30,14 @@ export const uploadAnexo = (tarefaId, file) => {
 
 export const deleteAnexo = (tarefaId, anexoId) =>
   api.delete(`/kanban/tarefas/${tarefaId}/anexos/${anexoId}/`);
+
+// RF-31: métricas operacionais do quadro
+export const getMetricas = (params = {}) =>
+  api.get('/kanban/metricas/', { params });
+
+// RF-32: exportação em CSV
+export const exportarTarefas = (params = {}) =>
+  api.get('/kanban/exportar/tarefas/', { params, responseType: 'blob' });
+
+export const exportarTransicoes = (params = {}) =>
+  api.get('/kanban/exportar/transicoes/', { params, responseType: 'blob' });

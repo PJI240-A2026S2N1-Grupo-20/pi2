@@ -1,4 +1,4 @@
-# EletroKanban: Sistema de Gestão de Negociações (v0.9.0)
+# EletroKanban: Sistema de Gestão de Negociações (v1.0.0)
 
 Aplicação web destinada ao gerenciamento de negociações, vendas, orçamentos e atividades do setor comercial com abordagem para dispositivos móveis, desenvolvida para o Projeto Integrador Univesp.
 ## Tecnologias Utilizadas
@@ -45,3 +45,9 @@ Acesse `<IP_DO_SERVIDOR>:8000/api/docs/` no navegador para visualizar a document
 ## Redefinição de Senha
 
 A redefinição de senhas de usuários é realizada exclusivamente pela interface administrativa do Django, em `http://<IP_DO_SERVIDOR>:8000/admin/`, acessível apenas por administradores. Não há autoatendimento de redefinição no frontend da aplicação.
+
+## Novidades na versao 1.0.0
+
+- **RF-31 - Dashboard de metricas operacionais:** painel com total de tarefas por colecao, taxa de conclusao, tempo medio de ciclo e volume de tarefas atrasadas, com filtro de periodo (7, 30 ou 90 dias, ou todo o historico).
+- **RF-32 - Exportacao de dados em CSV:** exportacao das tarefas e do historico de transicoes, respeitando o periodo selecionado. Os arquivos usam separador ponto e virgula e BOM UTF-8, permitindo abertura direta no Microsoft Excel.
+- **Ajustes de interface:** navegacao por abas entre o quadro e o painel de metricas, e correcoes de acentuacao em mensagens de feedback e nos titulos das colecoes.

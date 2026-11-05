@@ -1,12 +1,19 @@
 from rest_framework import viewsets, permissions, status
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.core.exceptions import ValidationError
+from django.http import HttpResponse
 from django.utils import timezone
 
 from .models import (
     Contato, Fluxo, Tarefa, Subtarefa, Transicao, Anexo, Auditoria, validar_pdf,
+)
+from .metrics import (
+    calcular_metricas,
+    exportar_tarefas_csv,
+    exportar_transicoes_csv,
 )
 from .serializers import (
     ContatoSerializer,
@@ -34,7 +41,7 @@ def _encontrar_contato_duplicado(nome, email, telefone, excluir_pk=None):
     """Retorna (contato_conflitante, motivo) ou (None, None).
 
     Regra: nome (sem diferenciar caixa), email (sem diferenciar caixa) ou
-    telefone (comparando apenas os digitos) identicos a um contato ativo
+    telefone (comparando apenas os dígitos) idênticos a um contato ativo
     existente configuram duplicata.
     """
     qs = Contato.objects.filter(ativo=True)
@@ -62,7 +69,7 @@ def _encontrar_contato_duplicado(nome, email, telefone, excluir_pk=None):
 
 
 def _serializar_campos_auditaveis(tarefa):
-    """RF-28: extrai um snapshot JSON-serializavel dos campos auditaveis."""
+    """RF-28: extrai um snapshot JSON-serializável dos campos auditáveis."""
     return {
         'estado': tarefa.estado or '',
         'responsavel': tarefa.responsavel_id,
@@ -76,7 +83,7 @@ def _serializar_campos_auditaveis(tarefa):
 
 
 def _registrar_auditoria(tarefa, usuario, tipo, anteriores, novos, justificativa=''):
-    """RF-28: registra uma entrada de auditoria apenas quando ha diferenca."""
+    """RF-28: registra uma entrada de auditoria apenas quando há diferença."""
     if anteriores == novos:
         return None
     return Auditoria.objects.create(
@@ -108,7 +115,7 @@ class ContatoViewSet(viewsets.ModelViewSet):
         }.get(motivo, motivo)
         return Response({
             'detail': (
-                f"Ja existe um contato ativo com este {rotulo}. "
+                f"Já existe um contato ativo com este {rotulo}. "
                 f"Use o contato existente ou informe um valor diferente."
             ),
             'reason': motivo,
@@ -249,7 +256,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             permitidas = TRANSICOES_PERMITIDAS.get(instance.estado, set())
             if novo_estado not in permitidas:
                 return Response(
-                    {'detail': "Movimentacao nao permitida entre estas colecoes."},
+                    {'detail': "Movimentação não permitida entre estas coleções."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -257,7 +264,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if novo_estado in ['a_fazer', 'em_andamento'] and not data_prevista:
             return Response(
-                {'detail': "Tarefas nas colecoes 'A fazer' ou 'Em andamento' exigem uma Data Prevista."},
+                {'detail': "Tarefas nas coleções 'A fazer' ou 'Em andamento' exigem uma Data Prevista."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -265,7 +272,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             res_sub = instance.subtarefas.filter(tipo='resultado').first()
             if res_sub and not res_sub.opcao_selecionada and not res_sub.concluida:
                 return Response(
-                    {'detail': "A tarefa so pode ser concluida com o preenchimento da subtarefa de Resultado."},
+                    {'detail': "A tarefa só pode ser concluída com o preenchimento da subtarefa de Resultado."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -321,7 +328,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if tarefa.estado != 'concluido':
             return Response(
-                {'detail': 'Apenas tarefas na colecao "Concluido" podem ser reabertas.'},
+                {'detail': 'Apenas tarefas na coleção "Concluído" podem ser reabertas.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -330,13 +337,13 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if destino not in ['a_fazer', 'em_andamento']:
             return Response(
-                {'detail': 'Destino invalido. Escolha "A fazer" ou "Em andamento".'},
+                {'detail': 'Destino inválido. Escolha "A fazer" ou "Em andamento".'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not justificativa:
             return Response(
-                {'detail': 'A justificativa e obrigatoria para reabrir a tarefa.'},
+                {'detail': 'A justificativa é obrigatória para reabrir a tarefa.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -392,7 +399,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
         try:
             validar_pdf(arquivo)
         except ValidationError as exc:
-            msg = exc.messages[0] if getattr(exc, 'messages', None) else 'Arquivo invalido.'
+            msg = exc.messages[0] if getattr(exc, 'messages', None) else 'Arquivo inválido.'
             return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
         anexo = Anexo(
@@ -418,7 +425,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             anexo = tarefa.anexos.get(id=anexo_id)
         except Anexo.DoesNotExist:
             return Response(
-                {'detail': 'Anexo nao encontrado para esta tarefa.'},
+                {'detail': 'Anexo não encontrado para esta tarefa.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -442,7 +449,53 @@ class SubtarefaViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         if instance.tipo == 'resultado':
             return Response(
-                {'detail': 'Subtarefas do tipo resultado nao podem ser excluidas.'},
+                {'detail': 'Subtarefas do tipo resultado não podem ser excluídas.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().destroy(request, *args, **kwargs)
+
+
+class MetricasView(APIView):
+    """RF-31: metricas operacionais do quadro."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        queryset = Tarefa.objects.filter(deletado=False)
+        metricas = calcular_metricas(
+            queryset,
+            data_inicio=request.query_params.get('data_inicio'),
+            data_fim=request.query_params.get('data_fim'),
+        )
+        return Response(metricas, status=status.HTTP_200_OK)
+
+
+class ExportarTarefasView(APIView):
+    """RF-32: exportacao de tarefas em CSV."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        queryset = Tarefa.objects.filter(deletado=False)
+        csv_texto = exportar_tarefas_csv(
+            queryset,
+            data_inicio=request.query_params.get('data_inicio'),
+            data_fim=request.query_params.get('data_fim'),
+        )
+        resposta = HttpResponse(csv_texto, content_type='text/csv; charset=utf-8')
+        resposta['Content-Disposition'] = 'attachment; filename="tarefas.csv"'
+        return resposta
+
+
+class ExportarTransicoesView(APIView):
+    """RF-32: exportacao do historico de transicoes em CSV."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        queryset = Tarefa.objects.filter(deletado=False)
+        csv_texto = exportar_transicoes_csv(
+            queryset,
+            data_inicio=request.query_params.get('data_inicio'),
+            data_fim=request.query_params.get('data_fim'),
+        )
+        resposta = HttpResponse(csv_texto, content_type='text/csv; charset=utf-8')
+        resposta['Content-Disposition'] = 'attachment; filename="transicoes.csv"'
+        return resposta

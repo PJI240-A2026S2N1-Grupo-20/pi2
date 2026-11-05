@@ -120,5 +120,5 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'EletroKanban API',
     'DESCRIPTION': 'API REST para o Sistema de Gestão de Negociações EletroKanban',
-    'VERSION': '0.9.0',
+    'VERSION': '1.0.0',
 }
