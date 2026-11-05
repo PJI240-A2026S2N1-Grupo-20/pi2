@@ -7,7 +7,7 @@
 
 html, body {
   width: 100%;
-  overflow-x: hidden; /* Impede completamente o deslocamento lateral indesejado */
+  overflow-x: hidden;
   background-color: #f3f4f6;
   color: #1f2937;
   line-height: 1.5;
@@ -22,30 +22,54 @@ html, body {
 
 /* ---------- Ferramentas de Acessibilidade (RF-33) ---------- */
 
-/* Escala de Cinza */
+/* 1. Escala de Cinza */
 html.a11y-grayscale body {
   filter: grayscale(100%);
 }
 
-/* Alto Contraste */
+/* 2. Alto Contraste (Padrão UNIVESP: Fundo Preto, Texto Branco/Amarelo, sem cores) */
 html.a11y-high-contrast body {
-  filter: contrast(150%) saturate(140%);
+  background-color: #000000 !important;
+  color: #ffffff !important;
 }
 
-/* Contraste Negativo */
+html.a11y-high-contrast body * {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border-color: #ffff00 !important;
+  box-shadow: none !important;
+}
+
+/* Botões e Links no Alto Contraste */
+html.a11y-high-contrast button,
+html.a11y-high-contrast a,
+html.a11y-high-contrast [role="button"],
+html.a11y-high-contrast select {
+  background-color: #000000 !important;
+  color: #ffff00 !important;
+  border: 2px solid #ffff00 !important;
+}
+
+/* Ícones no Alto Contraste */
+html.a11y-high-contrast svg {
+  color: #ffff00 !important;
+  stroke: #ffff00 !important;
+}
+
+/* 3. Contraste Negativo (Inverte as cores, mantendo os matizes) */
 html.a11y-negative-contrast body {
-  filter: invert(100%) hue-rotate(180deg);
+  filter: invert(100%) hue-rotate(180deg) !important;
 }
 
-/* Luz de Cor de Fundo: bege suave, visível na área de conteúdo (main) */
+/* 4. Luz de Cor de Fundo */
 html.a11y-soft-bg body {
   background-color: #fff8dc !important;
 }
 
-/* Fonte Legível: alternativa gratuita com fallback universal */
+/* 5. Fonte Legível */
 html.a11y-readable-font body,
 html.a11y-readable-font body * {
-  font-family: 'Atkinson Hyperlegible', Verdana, Tahoma, sans-serif;
-  letter-spacing: 0.02em;
-  line-height: 1.7;
+  font-family: 'Atkinson Hyperlegible', Verdana, Tahoma, sans-serif !important;
+  letter-spacing: 0.02em !important;
+  line-height: 1.7 !important;
 }

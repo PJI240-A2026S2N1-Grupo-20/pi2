@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Accessibility,
   ZoomIn,
   ZoomOut,
   BarChart3,
@@ -12,6 +11,27 @@ import {
   Check,
 } from 'lucide-react';
 
+// SVG customizado: Símbolo Universal de Acesso (braços abertos)
+const UniversalAccessIcon = ({ size = 16 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <circle cx="12" cy="6.5" r="1.5" />
+    <path d="M12 8v5" />
+    <path d="M7 10.5l5-1.5 5 1.5" />
+    <path d="M8 21.5l4-8.5 4 8.5" />
+  </svg>
+);
+
 const STORAGE_KEY = 'eletrokanban_a11y';
 const STEP = 10;
 const MIN_SCALE = 80;
@@ -19,10 +39,7 @@ const MAX_SCALE = 150;
 
 const DEFAULT_STATE = {
   fontScale: 100,
-  grayscale: false,
-  highContrast: false,
-  negativeContrast: false,
-  softBackground: false,
+  colorMode: 'default', // 'default', 'grayscale', 'highContrast', 'negativeContrast', 'softBackground'
   readableFont: false,
 };
 
@@ -30,7 +47,13 @@ const loadState = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_STATE };
-    return { ...DEFAULT_STATE, ...JSON.parse(raw) };
+    // Suporte para migração de estado antigo (onde as cores eram booleanas)
+    const parsed = JSON.parse(raw);
+    return {
+      fontScale: parsed.fontScale ?? 100,
+      colorMode: parsed.colorMode ?? 'default',
+      readableFont: parsed.readableFont ?? false,
+    };
   } catch {
     return { ...DEFAULT_STATE };
   }
@@ -39,10 +62,28 @@ const loadState = () => {
 const applyState = (state) => {
   const root = document.documentElement;
   root.style.fontSize = `${state.fontScale}%`;
-  root.classList.toggle('a11y-grayscale', state.grayscale);
-  root.classList.toggle('a11y-high-contrast', state.highContrast);
-  root.classList.toggle('a11y-negative-contrast', state.negativeContrast);
-  root.classList.toggle('a11y-soft-bg', state.softBackground);
+
+  // Remove todas as classes de cor antes de aplicar a nova
+  root.classList.remove(
+    'a11y-grayscale',
+    'a11y-high-contrast',
+    'a11y-negative-contrast',
+    'a11y-soft-bg'
+  );
+
+  // Aplica a classe de cor correspondente ao modo selecionado
+  if (state.colorMode !== 'default') {
+    const classMap = {
+      grayscale: 'a11y-grayscale',
+      highContrast: 'a11y-high-contrast',
+      negativeContrast: 'a11y-negative-contrast',
+      softBackground: 'a11y-soft-bg',
+    };
+    if (classMap[state.colorMode]) {
+      root.classList.add(classMap[state.colorMode]);
+    }
+  }
+
   root.classList.toggle('a11y-readable-font', state.readableFont);
 };
 
@@ -53,7 +94,6 @@ export const AccessibilityMenu = () => {
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
 
-  // Aplica as classes/estilos no <html> e persiste em localStorage
   useEffect(() => {
     applyState(state);
     try {
@@ -63,7 +103,6 @@ export const AccessibilityMenu = () => {
     }
   }, [state]);
 
-  // Fecha ao clicar fora + Escape
   useEffect(() => {
     if (!open) return;
     const onMouseDown = (e) => {
@@ -85,11 +124,10 @@ export const AccessibilityMenu = () => {
     };
   }, [open]);
 
-  // Foca o primeiro item do menu ao abrir
   useEffect(() => {
     if (open && menuRef.current) {
       const first = menuRef.current.querySelector(
-        '[role="menuitem"], [role="menuitemcheckbox"]'
+        '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'
       );
       if (first) first.focus({ preventScroll: true });
     }
@@ -97,6 +135,10 @@ export const AccessibilityMenu = () => {
 
   const update = (patch) => setState((s) => ({ ...s, ...patch }));
   const reset = () => setState({ ...DEFAULT_STATE });
+
+  const toggleColorMode = (mode) => {
+    update({ colorMode: state.colorMode === mode ? 'default' : mode });
+  };
 
   const canIncrease = state.fontScale < MAX_SCALE;
   const canDecrease = state.fontScale > MIN_SCALE;
@@ -134,17 +176,17 @@ export const AccessibilityMenu = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#3b82f6',
+          backgroundColor: '#ef4444', /* Mesma cor do botão Sair */
           color: '#ffffff',
           border: 'none',
-          padding: '0.4rem 0.6rem',
+          padding: '0.4rem', /* Padding uniforme para deixar o botão quadrado */
           borderRadius: '4px',
           cursor: 'pointer',
           fontWeight: '500',
           fontSize: '0.8rem',
         }}
       >
-        <Accessibility size={16} />
+        <UniversalAccessIcon size={16} />
       </button>
 
       {open && (
@@ -209,50 +251,52 @@ export const AccessibilityMenu = () => {
             <ZoomOut size={16} /> Diminuir o Texto
           </button>
 
+          {/* Opções mutuamente exclusivas (menuitemradio) */}
           <button
             type="button"
-            role="menuitemcheckbox"
-            aria-checked={state.grayscale}
-            onClick={() => update({ grayscale: !state.grayscale })}
+            role="menuitemradio"
+            aria-checked={state.colorMode === 'grayscale'}
+            onClick={() => toggleColorMode('grayscale')}
             style={itemStyle}
           >
             <BarChart3 size={16} /> Escala de Cinza
-            {state.grayscale && <Check size={14} style={checkStyle} />}
+            {state.colorMode === 'grayscale' && <Check size={14} style={checkStyle} />}
           </button>
 
           <button
             type="button"
-            role="menuitemcheckbox"
-            aria-checked={state.highContrast}
-            onClick={() => update({ highContrast: !state.highContrast })}
+            role="menuitemradio"
+            aria-checked={state.colorMode === 'highContrast'}
+            onClick={() => toggleColorMode('highContrast')}
             style={itemStyle}
           >
             <ContrastIcon size={16} /> Alto Contraste
-            {state.highContrast && <Check size={14} style={checkStyle} />}
+            {state.colorMode === 'highContrast' && <Check size={14} style={checkStyle} />}
           </button>
 
           <button
             type="button"
-            role="menuitemcheckbox"
-            aria-checked={state.negativeContrast}
-            onClick={() => update({ negativeContrast: !state.negativeContrast })}
+            role="menuitemradio"
+            aria-checked={state.colorMode === 'negativeContrast'}
+            onClick={() => toggleColorMode('negativeContrast')}
             style={itemStyle}
           >
             <Eye size={16} /> Contraste Negativo
-            {state.negativeContrast && <Check size={14} style={checkStyle} />}
+            {state.colorMode === 'negativeContrast' && <Check size={14} style={checkStyle} />}
           </button>
 
           <button
             type="button"
-            role="menuitemcheckbox"
-            aria-checked={state.softBackground}
-            onClick={() => update({ softBackground: !state.softBackground })}
+            role="menuitemradio"
+            aria-checked={state.colorMode === 'softBackground'}
+            onClick={() => toggleColorMode('softBackground')}
             style={itemStyle}
           >
             <Lightbulb size={16} /> Luz de Cor de Fundo
-            {state.softBackground && <Check size={14} style={checkStyle} />}
+            {state.colorMode === 'softBackground' && <Check size={14} style={checkStyle} />}
           </button>
 
+          {/* Fonte Legível é independente (menuitemcheckbox) */}
           <button
             type="button"
             role="menuitemcheckbox"

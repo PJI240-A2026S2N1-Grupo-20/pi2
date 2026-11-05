@@ -31,7 +31,7 @@ export const DashboardPage = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Layout size={22} />
-          <h1 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0 }}>EletroKanban (v0.5.2)</h1>
+          <h1 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0 }}>EletroKanban (v0.5.3)</h1>
         </div>
 
         <div style={{
@@ -65,7 +65,7 @@ export const DashboardPage = () => {
           <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
             {user?.username} ({user?.papel})
           </span>
-          <AccessibilityMenu />
+          
           <button
             onClick={logout}
             style={{
@@ -84,6 +84,9 @@ export const DashboardPage = () => {
           >
             <LogOut size={14} /> Sair
           </button>
+          
+          {/* Botão de Acessibilidade agora fica À DIREITA do botão Sair */}
+          <AccessibilityMenu />
         </div>
       </header>
 
