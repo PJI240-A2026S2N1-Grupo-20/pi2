@@ -26,6 +26,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const [showNewContact, setShowNewContact] = useState(false);
   const [newContactInput, setNewContactInput] = useState('');
   const [contactError, setContactError] = useState('');
+  const [contactInfo, setContactInfo] = useState('');
   const [arquivosPendentes, setArquivosPendentes] = useState([]);
   const [tarefaCriada, setTarefaCriada] = useState(null);
 
@@ -94,6 +95,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
       return;
     }
     setContactError('');
+    setContactInfo('');
     try {
       const val = newContactInput.trim();
       const payload = {
@@ -110,7 +112,30 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
       setShowNewContact(false);
       setNewContactInput('');
     } catch (err) {
-      setContactError(err.response?.data?.detail || 'Erro ao cadastrar contato.');
+      const data = err.response?.data;
+      if (data && data.existing) {
+        // Servidor detectou duplicata: adiciona o existente e seleciona.
+        setContatos((prev) => {
+          const existe = prev.some((c) => String(c.id) === String(data.existing.id));
+          return existe ? prev : [...prev, data.existing];
+        });
+        setSelectedContato(String(data.existing.id));
+        setShowNewContact(false);
+        setNewContactInput('');
+        setContactError('');
+        const exibicao =
+          data.existing.nome ||
+          data.existing.email ||
+          data.existing.telefone ||
+          `Contato #${data.existing.id}`;
+        setContactInfo(
+          `Já existe um contato com estes dados ("${exibicao}"). ` +
+          'Ele foi selecionado automaticamente.'
+        );
+        setTimeout(() => setContactInfo(''), 6000);
+      } else {
+        setContactError(data?.detail || 'Erro ao cadastrar contato.');
+      }
     }
   };
 
@@ -302,7 +327,11 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 </label>
                 <button
                   type="button"
-                  onClick={() => setShowNewContact(!showNewContact)}
+                  onClick={() => {
+                    setShowNewContact(!showNewContact);
+                    setContactInfo('');
+                    setContactError('');
+                  }}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -455,6 +484,23 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                       );
                     })}
                   </select>
+
+                  {contactInfo && (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      style={{
+                        marginTop: '0.35rem',
+                        padding: '0.4rem 0.6rem',
+                        backgroundColor: '#d1fae5',
+                        color: '#065f46',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                      }}
+                    >
+                      {contactInfo}
+                    </div>
+                  )}
                 </>
               )}
             </div>

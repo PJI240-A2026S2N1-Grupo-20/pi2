@@ -26,8 +26,43 @@ TRANSICOES_PERMITIDAS = {
 }
 
 
+def _apenas_digitos(valor):
+    return ''.join(c for c in (valor or '') if c.isdigit())
+
+
+def _encontrar_contato_duplicado(nome, email, telefone, excluir_pk=None):
+    """Retorna (contato_conflitante, motivo) ou (None, None).
+
+    Regra: nome (sem diferenciar caixa), email (sem diferenciar caixa) ou
+    telefone (comparando apenas os digitos) identicos a um contato ativo
+    existente configuram duplicata.
+    """
+    qs = Contato.objects.filter(ativo=True)
+    if excluir_pk is not None:
+        qs = qs.exclude(pk=excluir_pk)
+
+    if nome:
+        conflito = qs.filter(nome__iexact=nome).first()
+        if conflito:
+            return conflito, 'nome'
+
+    if email:
+        conflito = qs.filter(email__iexact=email).first()
+        if conflito:
+            return conflito, 'email'
+
+    if telefone:
+        digitos = _apenas_digitos(telefone)
+        if digitos:
+            for candidato in qs.only('telefone'):
+                if _apenas_digitos(candidato.telefone) == digitos:
+                    return candidato, 'telefone'
+
+    return None, None
+
+
 def _serializar_campos_auditaveis(tarefa):
-    """RF-28: extrai um snapshot JSON-serializável dos campos auditáveis."""
+    """RF-28: extrai um snapshot JSON-serializavel dos campos auditaveis."""
     return {
         'estado': tarefa.estado or '',
         'responsavel': tarefa.responsavel_id,
@@ -41,7 +76,7 @@ def _serializar_campos_auditaveis(tarefa):
 
 
 def _registrar_auditoria(tarefa, usuario, tipo, anteriores, novos, justificativa=''):
-    """RF-28: registra uma entrada de auditoria apenas quando há diferença."""
+    """RF-28: registra uma entrada de auditoria apenas quando ha diferenca."""
     if anteriores == novos:
         return None
     return Auditoria.objects.create(
@@ -64,6 +99,46 @@ class ContatoViewSet(viewsets.ModelViewSet):
     queryset = Contato.objects.filter(ativo=True).order_by('nome')
     serializer_class = ContatoSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def _resposta_duplicado(self, contato, motivo):
+        rotulo = {
+            'nome': 'nome',
+            'email': 'e-mail',
+            'telefone': 'telefone',
+        }.get(motivo, motivo)
+        return Response({
+            'detail': (
+                f"Ja existe um contato ativo com este {rotulo}. "
+                f"Use o contato existente ou informe um valor diferente."
+            ),
+            'reason': motivo,
+            'existing': ContatoSerializer(contato).data,
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request, *args, **kwargs):
+        nome = (request.data.get('nome') or '').strip()
+        email = (request.data.get('email') or '').strip()
+        telefone = (request.data.get('telefone') or '').strip()
+
+        conflito, motivo = _encontrar_contato_duplicado(nome, email, telefone)
+        if conflito:
+            return self._resposta_duplicado(conflito, motivo)
+
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        nome = (request.data.get('nome', instance.nome) or '').strip()
+        email = (request.data.get('email', instance.email) or '').strip()
+        telefone = (request.data.get('telefone', instance.telefone) or '').strip()
+
+        conflito, motivo = _encontrar_contato_duplicado(
+            nome, email, telefone, excluir_pk=instance.pk,
+        )
+        if conflito:
+            return self._resposta_duplicado(conflito, motivo)
+
+        return super().update(request, *args, **kwargs)
 
 
 class FluxoViewSet(viewsets.ModelViewSet):
@@ -122,14 +197,14 @@ class TarefaViewSet(viewsets.ModelViewSet):
                     ordem_count += 1
                 Subtarefa.objects.create(
                     tarefa=tarefa,
-                    texto='Resultado [Concluída | Cancelada]',
+                    texto='Resultado [Concluida | Cancelada]',
                     ordem=ordem_count,
                     tipo='resultado'
                 )
             else:
                 Subtarefa.objects.create(
                     tarefa=tarefa,
-                    texto='Resultado [Concluída | Cancelada]',
+                    texto='Resultado [Concluida | Cancelada]',
                     ordem=1,
                     tipo='resultado'
                 )
@@ -174,7 +249,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             permitidas = TRANSICOES_PERMITIDAS.get(instance.estado, set())
             if novo_estado not in permitidas:
                 return Response(
-                    {'detail': "Movimentação não permitida entre estas coleções."},
+                    {'detail': "Movimentacao nao permitida entre estas colecoes."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -182,7 +257,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if novo_estado in ['a_fazer', 'em_andamento'] and not data_prevista:
             return Response(
-                {'detail': "Tarefas nas coleções 'A fazer' ou 'Em andamento' exigem uma Data Prevista."},
+                {'detail': "Tarefas nas colecoes 'A fazer' ou 'Em andamento' exigem uma Data Prevista."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -190,7 +265,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             res_sub = instance.subtarefas.filter(tipo='resultado').first()
             if res_sub and not res_sub.opcao_selecionada and not res_sub.concluida:
                 return Response(
-                    {'detail': "A tarefa só pode ser concluída com o preenchimento da subtarefa de Resultado."},
+                    {'detail': "A tarefa so pode ser concluida com o preenchimento da subtarefa de Resultado."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -246,7 +321,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if tarefa.estado != 'concluido':
             return Response(
-                {'detail': 'Apenas tarefas na coleção "Concluído" podem ser reabertas.'},
+                {'detail': 'Apenas tarefas na colecao "Concluido" podem ser reabertas.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -255,13 +330,13 @@ class TarefaViewSet(viewsets.ModelViewSet):
 
         if destino not in ['a_fazer', 'em_andamento']:
             return Response(
-                {'detail': 'Destino inválido. Escolha "A fazer" ou "Em andamento".'},
+                {'detail': 'Destino invalido. Escolha "A fazer" ou "Em andamento".'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not justificativa:
             return Response(
-                {'detail': 'A justificativa é obrigatória para reabrir a tarefa.'},
+                {'detail': 'A justificativa e obrigatoria para reabrir a tarefa.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -317,7 +392,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
         try:
             validar_pdf(arquivo)
         except ValidationError as exc:
-            msg = exc.messages[0] if getattr(exc, 'messages', None) else 'Arquivo inválido.'
+            msg = exc.messages[0] if getattr(exc, 'messages', None) else 'Arquivo invalido.'
             return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
         anexo = Anexo(
@@ -343,7 +418,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
             anexo = tarefa.anexos.get(id=anexo_id)
         except Anexo.DoesNotExist:
             return Response(
-                {'detail': 'Anexo não encontrado para esta tarefa.'},
+                {'detail': 'Anexo nao encontrado para esta tarefa.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -367,7 +442,7 @@ class SubtarefaViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         if instance.tipo == 'resultado':
             return Response(
-                {'detail': 'Subtarefas do tipo resultado não podem ser excluídas.'},
+                {'detail': 'Subtarefas do tipo resultado nao podem ser excluidas.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().destroy(request, *args, **kwargs)

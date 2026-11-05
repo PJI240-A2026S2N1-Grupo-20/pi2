@@ -448,3 +448,107 @@ class KanbanBackendTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(tarefa.auditorias.count(), 0)
+
+    # ================================================================= v0.9.1
+    def _criar_contato_existente(self):
+        return Contato.objects.create(
+            nome='Joao da Silva',
+            email='joao@email.com',
+            telefone='18999998888',
+        )
+
+    def test_rf14_bloqueia_nome_duplicado(self):
+        existente = self._criar_contato_existente()
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        url = reverse('contato-list')
+        response = client.post(url, {'nome': 'Joao da Silva'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('existing', response.data)
+        self.assertEqual(response.data['existing']['id'], existente.id)
+        self.assertEqual(response.data['reason'], 'nome')
+
+    def test_rf14_nome_duplicado_ignora_caixa(self):
+        self._criar_contato_existente()
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        url = reverse('contato-list')
+        response = client.post(url, {'nome': 'joao da silva'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['reason'], 'nome')
+
+    def test_rf14_bloqueia_email_duplicado(self):
+        self._criar_contato_existente()
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        url = reverse('contato-list')
+        response = client.post(url, {
+            'nome': 'Outro nome',
+            'email': 'joao@email.com',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['reason'], 'email')
+
+    def test_rf14_bloqueia_telefone_duplicado_normalizando_digitos(self):
+        self._criar_contato_existente()
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        url = reverse('contato-list')
+        response = client.post(url, {
+            'nome': 'Outro nome',
+            'telefone': '(18) 99999-8888',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['reason'], 'telefone')
+
+    def test_rf14_permite_contato_com_campos_distintos(self):
+        self._criar_contato_existente()
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        url = reverse('contato-list')
+        response = client.post(url, {
+            'nome': 'Maria Souza',
+            'email': 'maria@email.com',
+            'telefone': '18988887777',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_rf14_contato_inativo_nao_bloqueia(self):
+        existente = self._criar_contato_existente()
+        existente.ativo = False
+        existente.save()
+
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        url = reverse('contato-list')
+        response = client.post(url, {'nome': 'Joao da Silva'}, format='json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_rf14_permite_editar_proprio_contato_sem_conflito(self):
+        existente = self._criar_contato_existente()
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        url = reverse('contato-detail', args=[existente.id])
+        response = client.patch(url, {'nome': 'Joao da Silva'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['id'], existente.id)
+
+    def test_rf14_bloqueia_edicao_que_gera_conflito(self):
+        self._criar_contato_existente()
+        segundo = Contato.objects.create(
+            nome='Maria Souza', email='maria@email.com', telefone='',
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        url = reverse('contato-detail', args=[segundo.id])
+        response = client.patch(url, {'nome': 'Joao da Silva'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['reason'], 'nome')

@@ -170,4 +170,49 @@ describe('TaskModal - Testes de Contato por Nome, E-mail e Telefone', () => {
     ).toBeInTheDocument();
     expect(kanbanApi.createTarefa).not.toHaveBeenCalled();
   });
+
+  // --------------------------------------------------------------- v0.9.1
+  test('v0.9.1: duplicidade detectada no backend seleciona contato existente', async () => {
+    const erroDuplicado = {
+      response: {
+        status: 400,
+        data: {
+          detail: 'Ja existe um contato ativo com este nome.',
+          reason: 'nome',
+          existing: {
+            id: 1,
+            nome: 'Joao da Silva',
+            telefone: '18999999999',
+            email: 'joao@email.com',
+            ativo: true,
+          },
+        },
+      },
+    };
+    kanbanApi.createContato.mockRejectedValueOnce(erroDuplicado);
+
+    render(<TaskModal onClose={vi.fn()} onTaskSaved={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Buscar por nome/)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Novo/i }));
+    const campo = screen.getByPlaceholderText('Digite Nome, E-mail ou Telefone *');
+    fireEvent.change(campo, { target: { value: 'Joao da Silva' } });
+    fireEvent.click(screen.getByRole('button', { name: /Salvar Contato/i }));
+
+    await waitFor(() => {
+      expect(kanbanApi.createContato).toHaveBeenCalledWith(
+        expect.objectContaining({ nome: 'Joao da Silva' })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/selecionado automaticamente/i);
+    });
+
+    const selectContato = document.getElementById('task-contato');
+    expect(selectContato.value).toBe('1');
+  });
+
 });
