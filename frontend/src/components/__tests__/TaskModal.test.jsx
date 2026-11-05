@@ -13,6 +13,36 @@ vi.mock('../../context/AuthContext', () => ({
   }),
 }));
 
+vi.mock('../EntradaAssistida', () => ({
+  EntradaAssistida: ({ onAplicarSugestoes }) => (
+    <div data-testid="entrada-assistida-mock">
+      <button
+        type="button"
+        data-testid="disparar-conversa"
+        onClick={() => onAplicarSugestoes({
+          origem: 'conversa',
+          fluxo_sugerido: 'Atendimento Comercial',
+        })}
+      >
+        Simular conversa
+      </button>
+      <button
+        type="button"
+        data-testid="disparar-pdf"
+        onClick={() => onAplicarSugestoes({
+          origem: 'pdf',
+          arquivo: new File(['%PDF-1.4'], 'orc.pdf', { type: 'application/pdf' }),
+          numero_orcamento: '473528',
+          vl_total: 113.59,
+          _meta: { cliente_codigo: '123456', cliente_nome: 'JOAO DA SILVA' },
+        })}
+      >
+        Simular PDF com cliente nao cadastrado
+      </button>
+    </div>
+  ),
+}));
+
 describe('TaskModal - Testes de Contato por Nome, E-mail e Telefone', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -122,7 +152,6 @@ describe('TaskModal - Testes de Contato por Nome, E-mail e Telefone', () => {
     fireEvent.change(inputArquivo, { target: { files: [pdf] } });
 
     expect(await screen.findByText('orcamento.pdf')).toBeInTheDocument();
-    // Nada foi enviado ainda (modo staging)
     expect(kanbanApi.uploadAnexo).not.toHaveBeenCalled();
   });
 
@@ -215,4 +244,69 @@ describe('TaskModal - Testes de Contato por Nome, E-mail e Telefone', () => {
     expect(selectContato.value).toBe('1');
   });
 
+  // --------------------------------------------------------------- v1.1.0
+  test('v1.1.0: conversa com palavra-chave pre-seleciona fluxo comercial', async () => {
+    render(<TaskModal onClose={vi.fn()} onTaskSaved={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('entrada-assistida-mock')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('disparar-conversa'));
+
+    const selectFluxo = document.getElementById('task-fluxo');
+    expect(selectFluxo.value).toBe('10');
+  });
+
+  test('v1.1.0: PDF com cliente novo pergunta se deseja criar contato', async () => {
+    kanbanApi.createContato.mockResolvedValue({
+      data: { id: 777, nome: 'JOAO DA SILVA', email: '', telefone: '' },
+    });
+
+    render(<TaskModal onClose={vi.fn()} onTaskSaved={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('entrada-assistida-mock')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('disparar-pdf'));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('alertdialog', { name: /Sugestão de novo contato/i })
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Sim, criar contato/i }));
+
+    await waitFor(() => {
+      expect(kanbanApi.createContato).toHaveBeenCalledWith({ nome: 'JOAO DA SILVA' });
+    });
+    const selectContato = document.getElementById('task-contato');
+    expect(selectContato.value).toBe('777');
+  });
+
+  test('v1.1.0: PDF adiciona arquivo em arquivosPendentes ao criar tarefa', async () => {
+    kanbanApi.createTarefa.mockResolvedValue({ data: { id: 999, anexos: [] } });
+    kanbanApi.uploadAnexo.mockResolvedValue({ data: { id: 1 } });
+
+    render(<TaskModal onClose={vi.fn()} onTaskSaved={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('entrada-assistida-mock')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('disparar-pdf'));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('alertdialog', { name: /Sugestão de novo contato/i })
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Não, deixar em branco/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Criar Tarefa/i }));
+
+    await waitFor(() => expect(kanbanApi.createTarefa).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(kanbanApi.uploadAnexo).toHaveBeenCalledWith(999, expect.any(File));
+    });
+  });
 });

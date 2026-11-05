@@ -158,6 +158,16 @@ class FluxoViewSet(viewsets.ModelViewSet):
         return [permissions.IsAuthenticated()]
 
 
+def _verificar_orcamento_duplicado(numero, excluir_pk=None):
+    """RF-26: devolve a tarefa ativa com o mesmo numero_orcamento, se houver."""
+    if not numero:
+        return None
+    qs = Tarefa.objects.filter(deletado=False, numero_orcamento__iexact=numero)
+    if excluir_pk is not None:
+        qs = qs.exclude(pk=excluir_pk)
+    return qs.first()
+
+
 class TarefaViewSet(viewsets.ModelViewSet):
     serializer_class = TarefaSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -185,6 +195,27 @@ class TarefaViewSet(viewsets.ModelViewSet):
             resultado_snapshot=snapshot,
         )
 
+    def _resposta_orcamento_duplicado(self, numero, conflito):
+        return Response({
+            'detail': (
+                f'O numero de orcamento {numero} ja esta associado '
+                f'a outra tarefa ativa.'
+            ),
+            'reason': 'numero_orcamento',
+            'existing': {
+                'id': conflito.id,
+                'titulo': str(conflito),
+            },
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request, *args, **kwargs):
+        numero = (request.data.get('numero_orcamento') or '').strip()
+        if not request.data.get('confirmar_orcamento_duplicado'):
+            conflito = _verificar_orcamento_duplicado(numero)
+            if conflito:
+                return self._resposta_orcamento_duplicado(numero, conflito)
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         estado = 'a_fazer' if serializer.validated_data.get('data_prevista') else 'pendencias'
         responsavel = serializer.validated_data.get('responsavel') or self.request.user
@@ -204,14 +235,14 @@ class TarefaViewSet(viewsets.ModelViewSet):
                     ordem_count += 1
                 Subtarefa.objects.create(
                     tarefa=tarefa,
-                    texto='Resultado [Concluida | Cancelada]',
+                    texto='Resultado [Concluída | Cancelada]',
                     ordem=ordem_count,
                     tipo='resultado'
                 )
             else:
                 Subtarefa.objects.create(
                     tarefa=tarefa,
-                    texto='Resultado [Concluida | Cancelada]',
+                    texto='Resultado [Concluída | Cancelada]',
                     ordem=1,
                     tipo='resultado'
                 )
@@ -223,6 +254,18 @@ class TarefaViewSet(viewsets.ModelViewSet):
         )
 
     def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        numero = (request.data.get('numero_orcamento')
+                  or instance.numero_orcamento or '').strip()
+        if (numero
+                and not request.data.get('confirmar_orcamento_duplicado')):
+            conflito = _verificar_orcamento_duplicado(numero, excluir_pk=instance.pk)
+            if conflito:
+                return self._resposta_orcamento_duplicado(numero, conflito)
+
+        return self._update_impl(request, *args, **kwargs)
+
+    def _update_impl(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         data = request.data

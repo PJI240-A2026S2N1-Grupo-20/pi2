@@ -97,7 +97,9 @@ class AnexoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Anexo
-        fields = ['id', 'nome', 'tamanho', 'url', 'enviado_em']
+        fields = [
+            'id', 'nome', 'tamanho', 'url', 'numero_orcamento', 'enviado_em',
+        ]
         read_only_fields = ['id', 'nome', 'tamanho', 'url', 'enviado_em']
 
     def get_url(self, obj):
@@ -134,6 +136,8 @@ class TarefaSerializer(serializers.ModelSerializer):
             'contato_email', 'contato_telefone',
             'responsavel', 'responsavel_nome', 'estado', 'data_prevista',
             'data_real_inicio', 'data_conclusao',
+            'numero_orcamento', 'validade_orcamento',
+            'vl_produtos', 'vl_desconto', 'vl_icms_st', 'vl_total',
             'observacoes', 'subtarefas', 'transicoes', 'auditorias', 'anexos',
             'criado_em', 'atualizado_em',
         ]

@@ -4,6 +4,27 @@ import { useAuth } from '../context/AuthContext';
 import { X, Plus, Search } from 'lucide-react';
 import { DatePickerBR } from './DatePickerBR';
 import { AnexoManager } from './AnexoManager';
+import { EntradaAssistida } from './EntradaAssistida';
+
+const baseInput = {
+  width: '100%',
+  padding: '0.5rem',
+  border: '1px solid #d1d5db',
+  borderRadius: '4px',
+  fontSize: '16px',
+};
+
+const formatarValorInput = (n) => {
+  if (n === null || n === undefined || Number.isNaN(n)) return '';
+  return Number(n).toFixed(2).replace('.', ',');
+};
+
+const parseValorInput = (s) => {
+  if (s === '' || s === null || s === undefined) return null;
+  const limpo = String(s).replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(limpo);
+  return Number.isFinite(n) ? n : null;
+};
 
 export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const { user: currentUser } = useAuth();
@@ -21,13 +42,36 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const [justificativaResponsavel, setJustificativaResponsavel] = useState('');
   const [dataPrevista, setDataPrevista] = useState(task?.data_prevista || '');
   const [observacoes, setObservacoes] = useState(task?.observacoes || '');
+
+  // Campos de orçamento (RF-24, RF-25, RF-26)
+  const [numeroOrcamento, setNumeroOrcamento] = useState(task?.numero_orcamento || '');
+  const [validadeOrcamento, setValidadeOrcamento] = useState(task?.validade_orcamento || '');
+  const [vlProdutos, setVlProdutos] = useState(
+    task?.vl_produtos !== null && task?.vl_produtos !== undefined
+      ? Number(task.vl_produtos) : null,
+  );
+  const [vlDesconto, setVlDesconto] = useState(
+    task?.vl_desconto !== null && task?.vl_desconto !== undefined
+      ? Number(task.vl_desconto) : null,
+  );
+  const [vlIcmsSt, setVlIcmsSt] = useState(
+    task?.vl_icms_st !== null && task?.vl_icms_st !== undefined
+      ? Number(task.vl_icms_st) : null,
+  );
+  const [vlTotal, setVlTotal] = useState(
+    task?.vl_total !== null && task?.vl_total !== undefined
+      ? Number(task.vl_total) : null,
+  );
+
   const [error, setError] = useState('');
+  const [duplicadoInfo, setDuplicadoInfo] = useState(null);
 
   const [showNewContact, setShowNewContact] = useState(false);
   const [newContactInput, setNewContactInput] = useState('');
   const [contactError, setContactError] = useState('');
   const [contactInfo, setContactInfo] = useState('');
   const [arquivosPendentes, setArquivosPendentes] = useState([]);
+  const [clienteSugerido, setClienteSugerido] = useState(null);
   const [tarefaCriada, setTarefaCriada] = useState(null);
 
   const originalResponsavelId = task?.responsavel ? String(task.responsavel) : '';
@@ -114,7 +158,6 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
     } catch (err) {
       const data = err.response?.data;
       if (data && data.existing) {
-        // Servidor detectou duplicata: adiciona o existente e seleciona.
         setContatos((prev) => {
           const existe = prev.some((c) => String(c.id) === String(data.existing.id));
           return existe ? prev : [...prev, data.existing];
@@ -139,21 +182,31 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
     }
   };
 
-  const handleSubmitTask = async (e) => {
-    e.preventDefault();
-    if (tarefaCriada) return;
+  const montarPayload = (extra = {}) => {
+    const payload = {
+      fluxo: selectedFluxo ? parseInt(selectedFluxo, 10) : null,
+      contato: selectedContato ? parseInt(selectedContato, 10) : null,
+      data_prevista: dataPrevista || null,
+      observacoes: observacoes.trim() || '',
+      numero_orcamento: numeroOrcamento ? numeroOrcamento.trim() : null,
+      validade_orcamento: validadeOrcamento || null,
+      vl_produtos: vlProdutos,
+      vl_desconto: vlDesconto,
+      vl_icms_st: vlIcmsSt,
+      vl_total: vlTotal,
+      ...extra,
+    };
+
+    if (canAssign && selectedResponsavel) {
+      payload.responsavel = parseInt(selectedResponsavel, 10);
+    }
+    return payload;
+  };
+
+  const submeter = async (extra = {}) => {
     setError('');
     try {
-      const payload = {
-        fluxo: selectedFluxo ? parseInt(selectedFluxo, 10) : null,
-        contato: selectedContato ? parseInt(selectedContato, 10) : null,
-        data_prevista: dataPrevista || null,
-        observacoes: observacoes.trim() || '',
-      };
-
-      if (canAssign && selectedResponsavel) {
-        payload.responsavel = parseInt(selectedResponsavel, 10);
-      }
+      const payload = montarPayload(extra);
 
       if (task) {
         if (responsavelAlterado) {
@@ -197,12 +250,122 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
       if (onTaskSaved) onTaskSaved();
       onClose();
     } catch (err) {
+      const data = err.response?.data;
+      if (data && data.reason === 'numero_orcamento') {
+        setDuplicadoInfo(data);
+        return;
+      }
       const detail =
-        err.response?.data?.detail ||
-        err.response?.data?.responsavel?.[0] ||
-        err.response?.data?.data_prevista?.[0] ||
+        data?.detail ||
+        data?.responsavel?.[0] ||
+        data?.data_prevista?.[0] ||
+        data?.numero_orcamento?.[0] ||
         'Erro ao salvar tarefa.';
       setError(detail);
+    }
+  };
+
+  const handleSubmitTask = (e) => {
+    e.preventDefault();
+    if (tarefaCriada) return;
+    submeter();
+  };
+
+  const handleConfirmarDuplicado = () => {
+    setDuplicadoInfo(null);
+    submeter({ confirmar_orcamento_duplicado: true });
+  };
+
+  const handleAplicarSugestoes = (patch) => {
+    if (!patch || typeof patch !== 'object') return;
+
+    if (patch.origem === 'conversa') {
+      if (patch.fluxo_sugerido) {
+        const alvo = fluxos.find(
+          (f) => f.nome.toLowerCase() === patch.fluxo_sugerido.toLowerCase()
+        );
+        if (alvo) setSelectedFluxo(String(alvo.id));
+      }
+      return;
+    }
+
+    if (patch.origem === 'pdf') {
+      if (patch.fluxo_sugerido) {
+        const alvoFluxo = fluxos.find(
+          (f) => f.nome.toLowerCase() === patch.fluxo_sugerido.toLowerCase()
+        );
+        if (alvoFluxo) setSelectedFluxo(String(alvoFluxo.id));
+      }
+      if ('numero_orcamento' in patch) setNumeroOrcamento(patch.numero_orcamento || '');
+      if ('validade_orcamento' in patch) setValidadeOrcamento(patch.validade_orcamento || '');
+      if ('vl_produtos' in patch) setVlProdutos(patch.vl_produtos);
+      if ('vl_desconto' in patch) setVlDesconto(patch.vl_desconto);
+      if ('vl_icms_st' in patch) setVlIcmsSt(patch.vl_icms_st);
+      if ('vl_total' in patch) setVlTotal(patch.vl_total);
+
+      if (patch.arquivo) {
+        if (task) {
+          kanbanApi.uploadAnexo(task.id, patch.arquivo).catch(() => {
+            setError('Falha ao anexar o PDF. Tente novamente em Editar.');
+          });
+        } else {
+          setArquivosPendentes((prev) => {
+            const ja = prev.some(
+              (f) => f.name === patch.arquivo.name && f.size === patch.arquivo.size
+            );
+            return ja ? prev : [...prev, patch.arquivo];
+          });
+        }
+      }
+
+      const meta = patch._meta || {};
+      const codigo = (meta.cliente_codigo || '').trim();
+      const nome = (meta.cliente_nome || '').trim();
+      const indeterminado = !nome || codigo === '000001';
+      if (!indeterminado) {
+        const existente = contatos.find(
+          (c) => (c.nome || '').trim().toLowerCase() === nome.toLowerCase()
+        );
+        if (existente) {
+          setSelectedContato(String(existente.id));
+        } else {
+          setClienteSugerido({ codigo, nome });
+        }
+      }
+      return;
+    }
+
+    // Compatibilidade com patches antigos (sem origem).
+    if ('numero_orcamento' in patch) setNumeroOrcamento(patch.numero_orcamento || '');
+    if ('validade_orcamento' in patch) setValidadeOrcamento(patch.validade_orcamento || '');
+    if ('vl_produtos' in patch) setVlProdutos(patch.vl_produtos);
+    if ('vl_desconto' in patch) setVlDesconto(patch.vl_desconto);
+    if ('vl_icms_st' in patch) setVlIcmsSt(patch.vl_icms_st);
+    if ('vl_total' in patch) setVlTotal(patch.vl_total);
+  };
+
+  const handleCriarClienteSugerido = async () => {
+    if (!clienteSugerido) return;
+    const { nome } = clienteSugerido;
+    try {
+      const res = await kanbanApi.createContato({ nome });
+      setContatos((prev) => [...prev, res.data]);
+      setSelectedContato(String(res.data.id));
+      setClienteSugerido(null);
+    } catch (err) {
+      const data = err.response?.data;
+      if (data && data.existing) {
+        setContatos((prev) => {
+          const existe = prev.some(
+            (c) => String(c.id) === String(data.existing.id)
+          );
+          return existe ? prev : [...prev, data.existing];
+        });
+        setSelectedContato(String(data.existing.id));
+        setClienteSugerido(null);
+      } else {
+        setError(data?.detail || 'Erro ao criar contato a partir do PDF.');
+      }
     }
   };
 
@@ -226,7 +389,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
         style={{
           backgroundColor: '#ffffff',
           borderRadius: '8px',
-          maxWidth: '500px',
+          maxWidth: '560px',
           width: '100%',
           margin: 'auto',
           boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
@@ -293,13 +456,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 id="task-fluxo"
                 value={selectedFluxo}
                 onChange={(e) => setSelectedFluxo(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  fontSize: '16px',
-                }}
+                style={baseInput}
               >
                 <option value="">[Nenhum / Tarefa Livre]</option>
                 {fluxos.map((f) => (
@@ -363,14 +520,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                     placeholder="Digite Nome, E-mail ou Telefone *"
                     value={newContactInput}
                     onChange={(e) => setNewContactInput(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '0.4rem 0.6rem',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '4px',
-                      fontSize: '16px',
-                      marginBottom: '0.5rem',
-                    }}
+                    style={{ ...baseInput, marginBottom: '0.5rem' }}
                   />
                   {contactError && (
                     <div
@@ -430,13 +580,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                       value={contactSearch}
                       onChange={(e) => setContactSearch(e.target.value)}
                       onKeyDown={handleSearchKeyDown}
-                      style={{
-                        width: '100%',
-                        padding: '0.4rem 0.5rem 0.4rem 1.75rem',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '4px',
-                        fontSize: '16px',
-                      }}
+                      style={{ ...baseInput, paddingLeft: '1.75rem' }}
                     />
                   </div>
 
@@ -461,13 +605,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                     id="task-contato"
                     value={selectedContato}
                     onChange={(e) => setSelectedContato(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '0.5rem',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '4px',
-                      fontSize: '16px',
-                    }}
+                    style={baseInput}
                   >
                     <option value="">[Sem Contato Definido]</option>
                     {contatosFiltrados.length === 0 && (
@@ -524,11 +662,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 onChange={(e) => setSelectedResponsavel(e.target.value)}
                 disabled={!canAssign}
                 style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  fontSize: '16px',
+                  ...baseInput,
                   backgroundColor: canAssign ? '#ffffff' : '#f3f4f6',
                   color: canAssign ? '#111827' : '#4b5563',
                   cursor: canAssign ? 'pointer' : 'not-allowed',
@@ -569,14 +703,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                   value={justificativaResponsavel}
                   onChange={(e) => setJustificativaResponsavel(e.target.value)}
                   placeholder="Motivo da mudança de responsável..."
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
-                    fontSize: '16px',
-                    resize: 'vertical',
-                  }}
+                  style={{ ...baseInput, resize: 'vertical' }}
                 />
                 <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
                   Este texto é registrado na trilha de auditoria da tarefa.
@@ -601,14 +728,161 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 id="task-data-prevista"
                 value={dataPrevista}
                 onChange={setDataPrevista}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  fontSize: '16px',
-                }}
+                style={baseInput}
               />
+            </div>
+
+            <EntradaAssistida onAplicarSugestoes={handleAplicarSugestoes} fluxos={fluxos} />
+
+            <div style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+              <h4 style={{ fontSize: '0.9rem', margin: 0, marginBottom: '0.5rem', color: '#111827' }}>
+                Orçamento
+              </h4>
+
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label
+                  htmlFor="task-numero-orcamento"
+                  style={{
+                    display: 'block',
+                    fontSize: '0.85rem',
+                    fontWeight: '500',
+                    marginBottom: '0.35rem',
+                    color: '#374151',
+                  }}
+                >
+                  Número do orçamento
+                </label>
+                <input
+                  id="task-numero-orcamento"
+                  type="text"
+                  value={numeroOrcamento}
+                  onChange={(e) => setNumeroOrcamento(e.target.value)}
+                  placeholder="Ex.: 1234"
+                  style={baseInput}
+                />
+              </div>
+
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label
+                  htmlFor="task-validade-orcamento"
+                  style={{
+                    display: 'block',
+                    fontSize: '0.85rem',
+                    fontWeight: '500',
+                    marginBottom: '0.35rem',
+                    color: '#374151',
+                  }}
+                >
+                  Validade do orçamento
+                </label>
+                <DatePickerBR
+                  id="task-validade-orcamento"
+                  value={validadeOrcamento}
+                  onChange={setValidadeOrcamento}
+                  style={baseInput}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                  gap: '0.5rem',
+                }}
+              >
+                <div>
+                  <label
+                    htmlFor="task-vl-produtos"
+                    style={{
+                      display: 'block',
+                      fontSize: '0.8rem',
+                      fontWeight: '500',
+                      marginBottom: '0.25rem',
+                      color: '#374151',
+                    }}
+                  >
+                    Produtos (R$)
+                  </label>
+                  <input
+                    id="task-vl-produtos"
+                    type="text"
+                    inputMode="decimal"
+                    value={formatarValorInput(vlProdutos)}
+                    onChange={(e) => setVlProdutos(parseValorInput(e.target.value))}
+                    placeholder="0,00"
+                    style={baseInput}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="task-vl-desconto"
+                    style={{
+                      display: 'block',
+                      fontSize: '0.8rem',
+                      fontWeight: '500',
+                      marginBottom: '0.25rem',
+                      color: '#374151',
+                    }}
+                  >
+                    Desconto (R$)
+                  </label>
+                  <input
+                    id="task-vl-desconto"
+                    type="text"
+                    inputMode="decimal"
+                    value={formatarValorInput(vlDesconto)}
+                    onChange={(e) => setVlDesconto(parseValorInput(e.target.value))}
+                    placeholder="0,00"
+                    style={baseInput}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="task-vl-icms-st"
+                    style={{
+                      display: 'block',
+                      fontSize: '0.8rem',
+                      fontWeight: '500',
+                      marginBottom: '0.25rem',
+                      color: '#374151',
+                    }}
+                  >
+                    ICMS ST (R$)
+                  </label>
+                  <input
+                    id="task-vl-icms-st"
+                    type="text"
+                    inputMode="decimal"
+                    value={formatarValorInput(vlIcmsSt)}
+                    onChange={(e) => setVlIcmsSt(parseValorInput(e.target.value))}
+                    placeholder="0,00"
+                    style={baseInput}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="task-vl-total"
+                    style={{
+                      display: 'block',
+                      fontSize: '0.8rem',
+                      fontWeight: '500',
+                      marginBottom: '0.25rem',
+                      color: '#374151',
+                    }}
+                  >
+                    Total (R$)
+                  </label>
+                  <input
+                    id="task-vl-total"
+                    type="text"
+                    inputMode="decimal"
+                    value={formatarValorInput(vlTotal)}
+                    onChange={(e) => setVlTotal(parseValorInput(e.target.value))}
+                    placeholder="0,00"
+                    style={baseInput}
+                  />
+                </div>
+              </div>
             </div>
 
             <div style={{ marginBottom: '1.25rem' }}>
@@ -630,13 +904,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 placeholder="Detalhes sobre a negociação..."
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  fontSize: '16px',
-                }}
+                style={baseInput}
               />
             </div>
 
@@ -654,6 +922,63 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                   arquivosPendentes={arquivosPendentes}
                   onArquivosChange={setArquivosPendentes}
                 />
+              </div>
+            )}
+
+            {duplicadoInfo && (
+              <div
+                role="alertdialog"
+                aria-label="Aviso de orçamento duplicado"
+                style={{
+                  border: '1px solid #f59e0b',
+                  backgroundColor: '#fffbeb',
+                  color: '#92400e',
+                  borderRadius: '6px',
+                  padding: '0.75rem',
+                  marginBottom: '1rem',
+                  fontSize: '0.85rem',
+                }}
+              >
+                <p style={{ margin: 0, marginBottom: '0.5rem' }}>
+                  <strong>Atenção:</strong> {duplicadoInfo.detail}
+                </p>
+                {duplicadoInfo.existing && (
+                  <p style={{ margin: 0, marginBottom: '0.5rem', fontSize: '0.8rem' }}>
+                    Tarefa existente: #{duplicadoInfo.existing.id} {duplicadoInfo.existing.titulo}
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => setDuplicadoInfo(null)}
+                    style={{
+                      padding: '0.3rem 0.7rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      background: '#fff',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmarDuplicado}
+                    style={{
+                      padding: '0.3rem 0.7rem',
+                      border: 'none',
+                      borderRadius: '4px',
+                      background: '#f59e0b',
+                      color: '#fff',
+                      fontSize: '0.8rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Confirmar mesmo assim
+                  </button>
+                </div>
               </div>
             )}
 
@@ -708,6 +1033,58 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 </button>
               )}
             </div>
+            {clienteSugerido && (
+              <div
+                role="alertdialog"
+                aria-label="Sugestão de novo contato"
+                style={{
+                  border: '1px solid #f59e0b',
+                  backgroundColor: '#fffbeb',
+                  color: '#92400e',
+                  borderRadius: '6px',
+                  padding: '0.75rem',
+                  marginBottom: '1rem',
+                  fontSize: '0.85rem',
+                }}
+              >
+                <p style={{ margin: 0, marginBottom: '0.5rem' }}>
+                  O PDF menciona o cliente <strong>{clienteSugerido.codigo} - {clienteSugerido.nome}</strong>,
+                  mas ele não está cadastrado. Deseja criar um novo contato com este nome?
+                </p>
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => setClienteSugerido(null)}
+                    style={{
+                      padding: '0.3rem 0.7rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      background: '#fff',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Não, deixar em branco
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCriarClienteSugerido}
+                    style={{
+                      padding: '0.3rem 0.7rem',
+                      border: 'none',
+                      borderRadius: '4px',
+                      background: '#f59e0b',
+                      color: '#fff',
+                      fontSize: '0.8rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Sim, criar contato
+                  </button>
+                </div>
+              </div>
+            )}
           </form>
         )}
       </div>

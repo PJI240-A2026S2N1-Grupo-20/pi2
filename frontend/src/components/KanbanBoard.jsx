@@ -254,7 +254,7 @@ export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
         try {
           await kanbanApi.updateSubtarefa(resSub.id, {
             opcao_selecionada: payload.resultado,
-            concluida: payload.resultado === 'Concluida',
+            concluida: payload.resultado === 'Concluída',
           });
         } catch (err) {
           showFeedback(err.response?.data?.detail || "Erro ao registrar o resultado.");

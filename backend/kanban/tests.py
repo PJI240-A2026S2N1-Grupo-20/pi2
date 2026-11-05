@@ -673,3 +673,77 @@ class KanbanBackendTestCase(TestCase):
         for nome in ('exportar-tarefas', 'exportar-transicoes'):
             response = client.get(reverse(nome))
             self.assertIn(response.status_code, [401, 403])
+
+
+class OrcamentoAssistidoTestCase(TestCase):
+    """Testes para RF-24, RF-25 e RF-26 (v1.1.0)."""
+
+    def setUp(self):
+        self.user = Usuario.objects.create_user(
+            username='vendedor_orc', password='x', papel='vendedor',
+        )
+        self.contato = Contato.objects.create(
+            nome='Cliente Orcamento', email='cliente@orc.com',
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_rf26_bloqueia_numero_orcamento_duplicado(self):
+        Tarefa.objects.create(
+            contato=self.contato, criado_por=self.user,
+            numero_orcamento='1234',
+        )
+        url = reverse('tarefa-list')
+        response = self.client.post(url, {
+            'contato': self.contato.id,
+            'numero_orcamento': '1234',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['reason'], 'numero_orcamento')
+        self.assertIn('existing', response.data)
+
+    def test_rf26_permite_duplicado_com_confirmacao(self):
+        Tarefa.objects.create(
+            contato=self.contato, criado_por=self.user,
+            numero_orcamento='1234',
+        )
+        url = reverse('tarefa-list')
+        response = self.client.post(url, {
+            'contato': self.contato.id,
+            'numero_orcamento': '1234',
+            'confirmar_orcamento_duplicado': True,
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Tarefa.objects.filter(numero_orcamento='1234').count(), 2)
+
+    def test_rf26_nao_bloqueia_orcamento_de_tarefa_deletada(self):
+        t = Tarefa.objects.create(
+            contato=self.contato, criado_por=self.user,
+            numero_orcamento='5555',
+        )
+        t.deletado = True
+        t.save(update_fields=['deletado'])
+
+        url = reverse('tarefa-list')
+        response = self.client.post(url, {
+            'contato': self.contato.id,
+            'numero_orcamento': '5555',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_rf25_campos_de_orcamento_persistem(self):
+        url = reverse('tarefa-list')
+        response = self.client.post(url, {
+            'contato': self.contato.id,
+            'numero_orcamento': '9001',
+            'validade_orcamento': '2026-12-31',
+            'vl_produtos': '1500.00',
+            'vl_desconto': '100.00',
+            'vl_icms_st': '50.00',
+            'vl_total': '1450.00',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        tarefa = Tarefa.objects.get(id=response.data['id'])
+        self.assertEqual(tarefa.numero_orcamento, '9001')
+        self.assertEqual(str(tarefa.validade_orcamento), '2026-12-31')
+        self.assertEqual(str(tarefa.vl_total), '1450.00')

@@ -66,6 +66,23 @@ class Tarefa(models.Model):
     )
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, blank=True)
     data_prevista = models.DateField(null=True, blank=True)
+    numero_orcamento = models.CharField(
+        max_length=50, null=True, blank=True, db_index=True,
+        help_text='Numero do orcamento associado a tarefa (RF-25/RF-26).'
+    )
+    validade_orcamento = models.DateField(null=True, blank=True)
+    vl_produtos = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+    )
+    vl_desconto = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+    )
+    vl_icms_st = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+    )
+    vl_total = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+    )
     data_real_inicio = models.DateTimeField(null=True, blank=True)
     data_conclusao = models.DateTimeField(null=True, blank=True)
     observacoes = models.TextField(blank=True, default='')
@@ -172,6 +189,7 @@ class Anexo(models.Model):
     arquivo = models.FileField(upload_to='anexos/%Y/%m/%d/', validators=[validar_pdf])
     nome = models.CharField(max_length=255)
     tamanho = models.BigIntegerField()
+    numero_orcamento = models.CharField(max_length=50, blank=True, default='')
     enviado_em = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
