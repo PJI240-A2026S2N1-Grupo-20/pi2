@@ -13,7 +13,7 @@ const COLLECTIONS = [
   { id: 'concluido', title: 'Concluído', color: '#10b981' },
 ];
 
-export const KanbanBoard = () => {
+export const KanbanBoard = ({ limiares = { l1: 2, l2: 5 } }) => {
   const [tasks, setTasks] = useState([]);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [feedbackMsg, setFeedbackMsg] = useState('');
@@ -336,6 +336,7 @@ export const KanbanBoard = () => {
             onEditTask={handleOpenEditModal}
             onReopenTask={(task) => setPendingTransition({ type: 'reabrir', task })}
             collections={COLLECTIONS}
+            limiares={limiares}
           />
         </div>
       ) : (
@@ -356,6 +357,7 @@ export const KanbanBoard = () => {
               onEditTask={handleOpenEditModal}
               onReopenTask={(task) => setPendingTransition({ type: 'reabrir', task })}
               collections={COLLECTIONS}
+            limiares={limiares}
             />
           ))}
         </div>

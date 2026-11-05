@@ -168,7 +168,7 @@ describe('Quadro Kanban - Testes da Etapa 3 (v0.4.x)', () => {
     const dialog = screen.getByRole('dialog', { name: 'Histórico de Transições' });
     expect(dialog).toBeInTheDocument();
 
-    // Escopa as buscas dentro do modal — "Pendências" e "A fazer" também
+    // Escopa as buscas dentro do modal - "Pendências" e "A fazer" também
     // aparecem como títulos de coluna do quadro.
     const modal = within(dialog);
     expect(modal.getByText('Pendências')).toBeInTheDocument();

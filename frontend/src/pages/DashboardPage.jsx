@@ -31,7 +31,7 @@ export const DashboardPage = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Layout size={22} />
-          <h1 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0 }}>EletroKanban (v0.7.0)</h1>
+          <h1 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0 }}>EletroKanban (v0.7.1)</h1>
         </div>
 
         <div style={{
@@ -100,14 +100,25 @@ export const DashboardPage = () => {
               Gestão adaptada para dispositivos móveis
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: '#4b5563' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-              <Clock size={13} color="#f59e0b" /> L1={limiares?.l1}d | L2={limiares?.l2}d
+
+          {/* RF-30: legenda dos limiares (L1 amarelo / L2 laranja) */}
+          <div
+            aria-label="Legenda dos indicadores de atraso"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem', color: '#4b5563', flexWrap: 'wrap' }}
+          >
+            <Clock size={13} color="#6b7280" />
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#f59e0b' }} aria-hidden="true" />
+              L1 = {limiares?.l1 ?? 2}d
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#ea580c' }} aria-hidden="true" />
+              L2 = {limiares?.l2 ?? 5}d
             </span>
           </div>
         </div>
 
-        <KanbanBoard />
+        <KanbanBoard limiares={limiares} />
       </main>
 
       {isFluxoModalOpen && (

@@ -15,6 +15,7 @@ export const KanbanColumn = ({
   onEditTask,
   onReopenTask,
   collections,
+  limiares,
 }) => {
   const handleDragOver = (e) => e.preventDefault();
 
@@ -65,6 +66,7 @@ export const KanbanColumn = ({
             onEditTask={onEditTask}
             onReopenTask={onReopenTask}
             collections={collections}
+            limiares={limiares}
           />
         ))}
       </div>

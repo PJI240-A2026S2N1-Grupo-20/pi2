@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import { getTaskTitle, ESTADO_LABEL } from '../utils/kanbanUtils';
+import { DatePickerBR } from './DatePickerBR';
 
 /**
  * Modal de confirmação para transições sensíveis (RN-04) e definição de data (RN-09):
@@ -133,11 +134,10 @@ export const ConfirmTransitionModal = ({ transition, onCancel, onConfirm }) => {
             >
               Data Prevista *
             </label>
-            <input
+            <DatePickerBR
               id="reabrir-data-prevista"
-              type="date"
               value={dataPrevista}
-              onChange={(e) => setDataPrevista(e.target.value)}
+              onChange={setDataPrevista}
               style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '16px' }}
             />
           </div>
@@ -175,11 +175,10 @@ export const ConfirmTransitionModal = ({ transition, onCancel, onConfirm }) => {
             >
               Data Prevista *
             </label>
-            <input
+            <DatePickerBR
               id="definir-data-prevista"
-              type="date"
               value={dataPrevista}
-              onChange={(e) => setDataPrevista(e.target.value)}
+              onChange={setDataPrevista}
               style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '16px' }}
             />
           </div>

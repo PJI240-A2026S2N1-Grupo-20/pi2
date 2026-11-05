@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import * as kanbanApi from '../api/kanbanApi';
 import { useAuth } from '../context/AuthContext';
 import { X, Plus, Search } from 'lucide-react';
+import { DatePickerBR } from './DatePickerBR';
 
 export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const { user: currentUser } = useAuth();
@@ -410,7 +411,7 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                     <option value="">[Sem Contato Definido]</option>
                     {contatosFiltrados.length === 0 && (
                       <option disabled value="__none__">
-                        Nenhum contato corresponde à busca
+                        - Nenhum contato disponível -
                       </option>
                     )}
                     {contatosFiltrados.map((c) => {
@@ -483,11 +484,10 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
               >
                 Data Prevista
               </label>
-              <input
+              <DatePickerBR
                 id="task-data-prevista"
-                type="date"
                 value={dataPrevista}
-                onChange={(e) => setDataPrevista(e.target.value)}
+                onChange={setDataPrevista}
                 style={{
                   width: '100%',
                   padding: '0.5rem',

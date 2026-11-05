@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   getTaskTitle, formatDateBR, formatDateTimeBR,
   ESTADO_LABEL, transicaoPermitida,
+  getDelayInfo, DELAY_COLORS, DELAY_BADGE_STYLES, DELAY_STATUS,
 } from '../utils/kanbanUtils';
 import {
   ChevronDown, ChevronUp, MoveRight, User, Calendar,
   FileText, Plus, MoreHorizontal, Check, X, Edit2,
-  RotateCcw, History,
+  RotateCcw, History, AlertTriangle, Clock,
 } from 'lucide-react';
 
 export const TaskCard = ({
@@ -22,6 +23,7 @@ export const TaskCard = ({
   onEditTask,
   onReopenTask,
   collections,
+  limiares = { l1: 2, l2: 5 },
 }) => {
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [activeMenuSubId, setActiveMenuSubId] = useState(null);
@@ -36,6 +38,13 @@ export const TaskCard = ({
   const cardMenuRef = useRef(null);
   const cardMenuButtonRef = useRef(null);
   const title = getTaskTitle(task);
+
+  // RF-30: status de atraso em função dos limiares
+  const delayInfo = getDelayInfo(task, limiares);
+  const showDelayIndicator =
+    delayInfo.status === DELAY_STATUS.warning || delayInfo.status === DELAY_STATUS.critical;
+  const borderColor = DELAY_COLORS[delayInfo.status] || DELAY_COLORS.normal;
+  const DelayIcon = delayInfo.status === DELAY_STATUS.warning ? Clock : AlertTriangle;
 
   useEffect(() => {
     if (showMoveMenu && moveMenuRef.current) {
@@ -71,7 +80,6 @@ export const TaskCard = ({
     return () => document.removeEventListener('keydown', onKey);
   }, [showMoveMenu, activeMenuSubId, showCardMenu, showHistory]);
 
-  // Fecha o menu "..." ao clicar fora
   useEffect(() => {
     if (!showCardMenu) return;
     const onMouseDown = (e) => {
@@ -132,11 +140,12 @@ export const TaskCard = ({
       onDragStart={handleDragStart}
       style={{
         backgroundColor: '#ffffff', borderRadius: '6px',
-        border: '1px solid #e5e7eb', borderLeft: '4px solid #3b82f6',
+        border: '1px solid #e5e7eb', borderLeft: `4px solid ${borderColor}`,
         padding: '0.875rem', marginBottom: '0.75rem',
         boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'grab',
       }}
       aria-expanded={isExpanded}
+      data-delay-status={delayInfo.status}
     >
       <div
         onClick={onToggleExpand}
@@ -153,9 +162,28 @@ export const TaskCard = ({
           alignItems: 'flex-start', cursor: 'pointer', gap: '0.5rem',
         }}
       >
-        <h4 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#1f2937', margin: 0 }}>
+        <h4 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#1f2937', margin: 0, flex: 1 }}>
           {title}
         </h4>
+
+        {/* RF-30: ponto colorido sempre visível (colapsado) com aria-label */}
+        {showDelayIndicator && (
+          <span
+            aria-label={`Alerta de prazo: ${delayInfo.label}`}
+            title={delayInfo.label}
+            style={{
+              display: 'inline-block',
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              backgroundColor: borderColor,
+              flexShrink: 0,
+              marginTop: '0.35rem',
+              boxShadow: '0 0 0 2px #fff',
+            }}
+          />
+        )}
+
         <button
           type="button"
           aria-label={isExpanded ? 'Recolher cartão' : 'Expandir cartão'}
@@ -174,9 +202,30 @@ export const TaskCard = ({
         <div style={{ marginTop: '0.875rem', paddingTop: '0.75rem', borderTop: '1px dashed #e5e7eb', fontSize: '0.85rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.35rem' }}>
             {task.data_prevista ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#374151' }}>
-                <Calendar size={14} color="#f59e0b" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#374151', flexWrap: 'wrap' }}>
+                <Calendar size={14} color={borderColor} />
                 <span><strong>Previsão:</strong> {formatDateBR(task.data_prevista)}</span>
+
+                {/* RF-30: badge textual (não depende só de cor - RNF-01) */}
+                {showDelayIndicator && (
+                  <span
+                    role="status"
+                    aria-label={delayInfo.label}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      padding: '0.15rem 0.5rem',
+                      borderRadius: '10px',
+                      fontSize: '0.72rem',
+                      fontWeight: '700',
+                      ...DELAY_BADGE_STYLES[delayInfo.status],
+                    }}
+                  >
+                    <DelayIcon size={12} />
+                    {delayInfo.label}
+                  </span>
+                )}
               </div>
             ) : (
               <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontStyle: 'italic' }}>Sem data prevista</span>
