@@ -4,6 +4,7 @@ export const getTarefas = () => api.get('/kanban/tarefas/');
 export const createTarefa = (data) => api.post('/kanban/tarefas/', data);
 export const updateTask = (id, data) => api.patch(`/kanban/tarefas/${id}/`, data);
 export const deleteTarefa = (id) => api.delete(`/kanban/tarefas/${id}/`);
+export const reabrirTask = (id, data) => api.post(`/kanban/tarefas/${id}/reabrir/`, data);
 
 export const getContatos = () => api.get('/kanban/contatos/');
 export const createContato = (data) => api.post('/kanban/contatos/', data);

@@ -12,6 +12,37 @@ export const formatDateBR = (dateString) => {
   return dateString;
 };
 
+export const formatDateTimeBR = (isoString) => {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return isoString;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${mins}`;
+};
+
+export const ESTADO_LABEL = {
+  pendencias: 'Pendências',
+  a_fazer: 'A fazer',
+  em_andamento: 'Em andamento',
+  concluido: 'Concluído',
+};
+
+/** RN-01: matriz de transições (espelha o backend). */
+export const TRANSICOES_PERMITIDAS = {
+  pendencias: ['a_fazer'],
+  a_fazer: ['pendencias', 'em_andamento', 'concluido'],
+  em_andamento: ['pendencias', 'a_fazer', 'concluido'],
+  concluido: ['a_fazer', 'em_andamento'],
+};
+
+export const transicaoPermitida = (origem, destino) => {
+  return TRANSICOES_PERMITIDAS[origem]?.includes(destino) ?? false;
+};
+
 /**
  * RF-10: Geração Automática do Título
  * Formato: {Nome do Fluxo} - {Nome do Contato}; sem fluxo: "Tarefa - {Contato}";
@@ -29,7 +60,6 @@ export const getTaskTitle = (task) => {
 
 /**
  * RF-07: Ordenação Cronológica Padrão
- * Apresenta as tarefas mais antigas no topo (ordem crescente de criação).
  */
 export const sortTasksChronologically = (tasks) => {
   return [...tasks].sort((a, b) => new Date(a.criado_em) - new Date(b.criado_em));

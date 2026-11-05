@@ -1,6 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { getTaskTitle, formatDateBR } from '../utils/kanbanUtils';
-import { ChevronDown, ChevronUp, MoveRight, User, Calendar, FileText, Plus, MoreHorizontal, Check, X, Edit2 } from 'lucide-react';
+import {
+  getTaskTitle, formatDateBR, formatDateTimeBR,
+  ESTADO_LABEL, transicaoPermitida,
+} from '../utils/kanbanUtils';
+import {
+  ChevronDown, ChevronUp, MoveRight, User, Calendar,
+  FileText, Plus, MoreHorizontal, Check, X, Edit2,
+  RotateCcw, History,
+} from 'lucide-react';
 
 export const TaskCard = ({
   task,
@@ -13,16 +20,21 @@ export const TaskCard = ({
   onDeleteSubtarefa,
   onReorderSubtarefa,
   onEditTask,
-  collections
+  onReopenTask,
+  collections,
 }) => {
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [activeMenuSubId, setActiveMenuSubId] = useState(null);
   const [insertingForSubId, setInsertingForSubId] = useState(null);
   const [insertPosition, setInsertPosition] = useState('below');
   const [newSubText, setNewSubText] = useState('');
+  const [showCardMenu, setShowCardMenu] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const moveMenuRef = useRef(null);
   const moveButtonRef = useRef(null);
+  const cardMenuRef = useRef(null);
+  const cardMenuButtonRef = useRef(null);
   const title = getTaskTitle(task);
 
   useEffect(() => {
@@ -30,9 +42,7 @@ export const TaskCard = ({
       const timer = setTimeout(() => {
         if (moveMenuRef.current) {
           const firstOption = moveMenuRef.current.querySelector('button');
-          if (firstOption) {
-            firstOption.focus({ preventScroll: true });
-          }
+          if (firstOption) firstOption.focus({ preventScroll: true });
           if (typeof moveMenuRef.current.scrollIntoView === 'function') {
             moveMenuRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
           }
@@ -43,20 +53,34 @@ export const TaskCard = ({
   }, [showMoveMenu]);
 
   useEffect(() => {
-    if (!showMoveMenu && activeMenuSubId === null) return;
+    if (!showMoveMenu && activeMenuSubId === null && !showCardMenu && !showHistory) return;
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       if (showMoveMenu) {
         setShowMoveMenu(false);
         moveButtonRef.current?.focus();
       }
-      if (activeMenuSubId !== null) {
-        setActiveMenuSubId(null);
+      if (activeMenuSubId !== null) setActiveMenuSubId(null);
+      if (showCardMenu) {
+        setShowCardMenu(false);
+        cardMenuButtonRef.current?.focus();
       }
+      if (showHistory) setShowHistory(false);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [showMoveMenu, activeMenuSubId]);
+  }, [showMoveMenu, activeMenuSubId, showCardMenu, showHistory]);
+
+  // Fecha o menu "..." ao clicar fora
+  useEffect(() => {
+    if (!showCardMenu) return;
+    const onMouseDown = (e) => {
+      const wrap = cardMenuRef.current?.parentElement;
+      if (wrap && !wrap.contains(e.target)) setShowCardMenu(false);
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [showCardMenu]);
 
   const handleMoveMenuKeyDown = (e) => {
     if (e.key === 'Escape') {
@@ -72,11 +96,8 @@ export const TaskCard = ({
       e.preventDefault();
       const currentIdx = buttons.indexOf(document.activeElement);
       let nextIdx;
-      if (e.key === 'ArrowDown') {
-        nextIdx = currentIdx < buttons.length - 1 ? currentIdx + 1 : 0;
-      } else {
-        nextIdx = currentIdx > 0 ? currentIdx - 1 : buttons.length - 1;
-      }
+      if (e.key === 'ArrowDown') nextIdx = currentIdx < buttons.length - 1 ? currentIdx + 1 : 0;
+      else nextIdx = currentIdx > 0 ? currentIdx - 1 : buttons.length - 1;
       buttons[nextIdx]?.focus();
     }
   };
@@ -99,19 +120,21 @@ export const TaskCard = ({
     setNewSubText('');
   };
 
+  const destinos = collections.filter((col) => {
+    if (col.id === task.estado) return false;
+    if (!transicaoPermitida(task.estado, col.id)) return false;
+    return true;
+  });
+
   return (
     <div
       draggable
       onDragStart={handleDragStart}
       style={{
-        backgroundColor: '#ffffff',
-        borderRadius: '6px',
-        border: '1px solid #e5e7eb',
-        borderLeft: '4px solid #3b82f6',
-        padding: '0.875rem',
-        marginBottom: '0.75rem',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-        cursor: 'grab'
+        backgroundColor: '#ffffff', borderRadius: '6px',
+        border: '1px solid #e5e7eb', borderLeft: '4px solid #3b82f6',
+        padding: '0.875rem', marginBottom: '0.75rem',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'grab',
       }}
       aria-expanded={isExpanded}
     >
@@ -126,11 +149,8 @@ export const TaskCard = ({
           }
         }}
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          cursor: 'pointer',
-          gap: '0.5rem'
+          display: 'flex', justifyContent: 'space-between',
+          alignItems: 'flex-start', cursor: 'pointer', gap: '0.5rem',
         }}
       >
         <h4 style={{ fontSize: '0.95rem', fontWeight: '600', color: '#1f2937', margin: 0 }}>
@@ -152,7 +172,7 @@ export const TaskCard = ({
 
       {isExpanded && (
         <div style={{ marginTop: '0.875rem', paddingTop: '0.75rem', borderTop: '1px dashed #e5e7eb', fontSize: '0.85rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.35rem' }}>
             {task.data_prevista ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#374151' }}>
                 <Calendar size={14} color="#f59e0b" />
@@ -162,28 +182,90 @@ export const TaskCard = ({
               <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontStyle: 'italic' }}>Sem data prevista</span>
             )}
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditTask(task);
-              }}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-                backgroundColor: '#eff6ff',
-                color: '#2563eb',
-                border: '1px solid #bfdbfe',
-                borderRadius: '4px',
-                padding: '0.2rem 0.5rem',
-                fontSize: '0.75rem',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              <Edit2 size={12} /> Editar
-            </button>
+            <div style={{ display: 'flex', gap: '0.35rem', position: 'relative' }}>
+              {task.estado === 'concluido' && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onReopenTask(task); }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                    backgroundColor: '#fef3c7', color: '#92400e',
+                    border: '1px solid #fde68a', borderRadius: '4px',
+                    padding: '0.2rem 0.5rem', fontSize: '0.75rem',
+                    fontWeight: '600', cursor: 'pointer',
+                  }}
+                >
+                  <RotateCcw size={12} /> Reabrir
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onEditTask(task); }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                  backgroundColor: '#eff6ff', color: '#2563eb',
+                  border: '1px solid #bfdbfe', borderRadius: '4px',
+                  padding: '0.2rem 0.5rem', fontSize: '0.75rem',
+                  fontWeight: '600', cursor: 'pointer',
+                }}
+              >
+                <Edit2 size={12} /> Editar
+              </button>
+              <button
+                type="button"
+                ref={cardMenuButtonRef}
+                aria-label="Mais ações"
+                aria-haspopup="true"
+                aria-expanded={showCardMenu}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCardMenu((v) => !v);
+                }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: '#f3f4f6', color: '#4b5563',
+                  border: '1px solid #d1d5db', borderRadius: '4px',
+                  padding: '0.2rem 0.4rem', fontSize: '0.75rem',
+                  fontWeight: '600', cursor: 'pointer',
+                }}
+              >
+                <MoreHorizontal size={14} />
+              </button>
+
+              {showCardMenu && (
+                <div
+                  ref={cardMenuRef}
+                  role="menu"
+                  style={{
+                    position: 'absolute', top: '100%', right: 0, marginTop: '0.25rem',
+                    backgroundColor: '#ffffff', border: '1px solid #d1d5db',
+                    borderRadius: '6px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                    zIndex: 40, minWidth: '200px', padding: '0.25rem 0',
+                  }}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowCardMenu(false);
+                      setShowHistory(true);
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '0.4rem',
+                      width: '100%', textAlign: 'left',
+                      padding: '0.45rem 0.75rem', border: 'none',
+                      background: 'transparent', fontSize: '0.8rem',
+                      color: '#1f2937', cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f3f4f6'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <History size={14} /> Histórico de transições
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {task.observacoes && (
@@ -225,8 +307,6 @@ export const TaskCard = ({
 
                     <li style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px solid #f3f4f6', position: 'relative' }}>
                       {sub.tipo === 'resultado' ? (
-                        // Tipo resultado: mantém <div>; o <select> é o alvo de clique,
-                        // então envolvê-lo em <label> dispararia o checkbox indevidamente.
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, marginRight: '0.5rem' }}>
                           <input
                             type="checkbox"
@@ -248,17 +328,8 @@ export const TaskCard = ({
                           </div>
                         </div>
                       ) : (
-                        // Tipo livre/fluxo: <label> nativo associa clique no texto ao checkbox.
-                        // Cobre clique do mouse, toque em mobile e leitores de tela (RNF-01).
                         <label
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                            flex: 1,
-                            marginRight: '0.5rem',
-                            cursor: 'pointer'
-                          }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, marginRight: '0.5rem', cursor: 'pointer' }}
                         >
                           <input
                             type="checkbox"
@@ -266,13 +337,11 @@ export const TaskCard = ({
                             onChange={() => onToggleSubtarefa(task.id, sub.id, sub.concluida)}
                             style={{ cursor: 'pointer' }}
                           />
-                          <span
-                            style={{
-                              textDecoration: sub.concluida ? 'line-through' : 'none',
-                              color: sub.concluida ? '#9ca3af' : '#374151',
-                              fontSize: '0.825rem'
-                            }}
-                          >
+                          <span style={{
+                            textDecoration: sub.concluida ? 'line-through' : 'none',
+                            color: sub.concluida ? '#9ca3af' : '#374151',
+                            fontSize: '0.825rem',
+                          }}>
                             {sub.texto}
                           </span>
                         </label>
@@ -298,67 +367,30 @@ export const TaskCard = ({
                         </button>
 
                         {activeMenuSubId === sub.id && (
-                          <div
-                            style={{
-                              position: 'absolute',
-                              right: 0,
-                              top: '100%',
-                              backgroundColor: '#ffffff',
-                              border: '1px solid #d1d5db',
-                              borderRadius: '6px',
-                              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                              zIndex: 20,
-                              minWidth: '175px',
-                              padding: '0.25rem 0'
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleOpenInsert(sub.id, 'above')}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}
-                            >
+                          <div style={{
+                            position: 'absolute', right: 0, top: '100%',
+                            backgroundColor: '#ffffff', border: '1px solid #d1d5db',
+                            borderRadius: '6px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                            zIndex: 20, minWidth: '175px', padding: '0.25rem 0',
+                          }}>
+                            <button type="button" onClick={() => handleOpenInsert(sub.id, 'above')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}>
                               Adicionar acima
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenInsert(sub.id, 'below')}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}
-                            >
+                            <button type="button" onClick={() => handleOpenInsert(sub.id, 'below')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}>
                               Adicionar abaixo
                             </button>
                             {!isFirst && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveMenuSubId(null);
-                                  onReorderSubtarefa(task.id, sub.id, 'up');
-                                }}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}
-                              >
+                              <button type="button" onClick={() => { setActiveMenuSubId(null); onReorderSubtarefa(task.id, sub.id, 'up'); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}>
                                 Mover subtarefa para cima
                               </button>
                             )}
                             {!isLast && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveMenuSubId(null);
-                                  onReorderSubtarefa(task.id, sub.id, 'down');
-                                }}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}
-                              >
+                              <button type="button" onClick={() => { setActiveMenuSubId(null); onReorderSubtarefa(task.id, sub.id, 'down'); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', cursor: 'pointer' }}>
                                 Mover subtarefa para baixo
                               </button>
                             )}
                             {sub.tipo !== 'resultado' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveMenuSubId(null);
-                                  onDeleteSubtarefa(task.id, sub.id);
-                                }}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', color: '#ef4444', cursor: 'pointer' }}
-                              >
+                              <button type="button" onClick={() => { setActiveMenuSubId(null); onDeleteSubtarefa(task.id, sub.id); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.65rem', border: 'none', background: 'transparent', fontSize: '0.775rem', color: '#ef4444', cursor: 'pointer' }}>
                                 Excluir subtarefa
                               </button>
                             )}
@@ -392,22 +424,13 @@ export const TaskCard = ({
             <button
               type="button"
               ref={moveButtonRef}
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMoveMenu(!showMoveMenu);
-              }}
+              onClick={(e) => { e.stopPropagation(); setShowMoveMenu(!showMoveMenu); }}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                backgroundColor: '#f3f4f6',
-                border: '1px solid #d1d5db',
-                padding: '0.4rem 0.65rem',
-                borderRadius: '4px',
-                fontSize: '0.8rem',
-                fontWeight: '500',
-                color: '#374151',
-                cursor: 'pointer'
+                display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                backgroundColor: '#f3f4f6', border: '1px solid #d1d5db',
+                padding: '0.4rem 0.65rem', borderRadius: '4px',
+                fontSize: '0.8rem', fontWeight: '500',
+                color: '#374151', cursor: 'pointer',
               }}
               aria-haspopup="true"
               aria-expanded={showMoveMenu}
@@ -415,57 +438,109 @@ export const TaskCard = ({
               <MoveRight size={14} /> Mover para...
             </button>
 
-            {showMoveMenu && (
+            {showMoveMenu && destinos.length > 0 && (
               <div
                 ref={moveMenuRef}
                 role="menu"
                 onKeyDown={handleMoveMenuKeyDown}
                 style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  marginTop: '0.25rem',
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                  zIndex: 30,
-                  minWidth: '160px',
-                  padding: '0.25rem 0'
+                  position: 'absolute', top: '100%', left: 0, marginTop: '0.25rem',
+                  backgroundColor: '#ffffff', border: '1px solid #d1d5db',
+                  borderRadius: '6px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                  zIndex: 30, minWidth: '160px', padding: '0.25rem 0',
                 }}
               >
-                {collections.map((col) => {
-                  if (col.id === task.estado) return null;
-                  return (
-                    <button
-                      key={col.id}
-                      type="button"
-                      role="menuitem"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onMoveTask(task.id, col.id);
-                        setShowMoveMenu(false);
-                        moveButtonRef.current?.focus();
-                      }}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '0.5rem 0.75rem',
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        fontSize: '0.8rem',
-                        color: '#1f2937',
-                        cursor: 'pointer'
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f3f4f6'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                    >
-                      {col.title}
-                    </button>
-                  );
-                })}
+                {destinos.map((col) => (
+                  <button
+                    key={col.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveTask(task.id, col.id);
+                      setShowMoveMenu(false);
+                      moveButtonRef.current?.focus();
+                    }}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left',
+                      padding: '0.5rem 0.75rem', backgroundColor: 'transparent',
+                      border: 'none', fontSize: '0.8rem', color: '#1f2937', cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f3f4f6'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    {col.title}
+                  </button>
+                ))}
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showHistory && (
+        <div
+          onClick={(e) => { e.stopPropagation(); setShowHistory(false); }}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            zIndex: 1200, padding: '1rem',
+          }}
+        >
+          <div
+            role="dialog"
+            aria-label="Histórico de Transições"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: '#ffffff', borderRadius: '8px',
+              maxWidth: '540px', width: '100%',
+              maxHeight: '80vh', overflowY: 'auto',
+              padding: '1.25rem',
+              boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold', color: '#111827' }}>
+                Histórico de Transições
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowHistory(false)}
+                aria-label="Fechar"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {(!task.transicoes || task.transicoes.length === 0) ? (
+              <p style={{ color: '#6b7280', fontSize: '0.85rem', margin: 0 }}>
+                Nenhuma transição registrada para esta tarefa.
+              </p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.8rem', color: '#374151' }}>
+                {task.transicoes.map((t) => (
+                  <li key={t.id} style={{ padding: '0.5rem 0', borderBottom: '1px solid #f3f4f6' }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#6b7280' }}>
+                      {formatDateTimeBR(t.data_hora)}
+                    </div>
+                    <div style={{ marginTop: '0.15rem' }}>
+                      <strong>{ESTADO_LABEL[t.origem] || t.origem}</strong>
+                      {' → '}
+                      <strong>{ESTADO_LABEL[t.destino] || t.destino}</strong>
+                      {t.usuario_nome && (
+                        <span style={{ color: '#6b7280' }}> · {t.usuario_nome}</span>
+                      )}
+                    </div>
+                    {t.justificativa && (
+                      <div style={{ fontStyle: 'italic', color: '#4b5563', marginTop: '0.15rem' }}>
+                        "{t.justificativa}"
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </div>

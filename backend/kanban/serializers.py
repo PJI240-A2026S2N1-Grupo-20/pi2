@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa
+from .models import Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa, Transicao
 from accounts.models import Usuario
 
 
@@ -60,8 +60,23 @@ class SubtarefaSerializer(serializers.ModelSerializer):
         fields = ['id', 'tarefa', 'texto', 'concluida', 'ordem', 'tipo', 'opcao_selecionada']
 
 
+class TransicaoSerializer(serializers.ModelSerializer):
+    usuario_nome = serializers.ReadOnlyField(source='usuario.username', default=None)
+    origem_display = serializers.CharField(source='get_origem_display', read_only=True)
+    destino_display = serializers.CharField(source='get_destino_display', read_only=True)
+
+    class Meta:
+        model = Transicao
+        fields = [
+            'id', 'origem', 'origem_display', 'destino', 'destino_display',
+            'usuario', 'usuario_nome', 'justificativa', 'resultado_snapshot', 'data_hora',
+        ]
+        read_only_fields = fields
+
+
 class TarefaSerializer(serializers.ModelSerializer):
     subtarefas = SubtarefaSerializer(many=True, read_only=True)
+    transicoes = TransicaoSerializer(many=True, read_only=True)
     fluxo_nome = serializers.ReadOnlyField(source='fluxo.nome', default=None)
     contato_nome = serializers.ReadOnlyField(source='contato.nome_exibicao', default=None)
     responsavel = serializers.PrimaryKeyRelatedField(queryset=Usuario.objects.all(), required=False, allow_null=True)
@@ -72,9 +87,10 @@ class TarefaSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'fluxo', 'fluxo_nome', 'contato', 'contato_nome',
             'responsavel', 'responsavel_nome', 'estado', 'data_prevista',
-            'observacoes', 'subtarefas', 'criado_em', 'atualizado_em'
+            'data_real_inicio', 'data_conclusao',
+            'observacoes', 'subtarefas', 'transicoes', 'criado_em', 'atualizado_em'
         ]
-        read_only_fields = ['criado_por', 'criado_em', 'atualizado_em']
+        read_only_fields = ['criado_por', 'criado_em', 'atualizado_em', 'data_real_inicio', 'data_conclusao']
 
     def get_responsavel_nome(self, obj):
         if obj.responsavel:
@@ -93,13 +109,11 @@ class TarefaSerializer(serializers.ModelSerializer):
             return value
 
         if self.instance is None:
-            # Criação: vendedor só pode manter a si mesmo
             if value is not None and value.id != request.user.id:
                 raise serializers.ValidationError(
                     "Apenas Subgerentes, Gerentes ou Administradores podem atribuir outro responsável."
                 )
         else:
-            # Edição: vendedor não pode alterar (nem limpar) o responsável
             novo_id = value.id if value else None
             if novo_id != self.instance.responsavel_id:
                 raise serializers.ValidationError(

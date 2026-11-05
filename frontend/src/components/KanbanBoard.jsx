@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { KanbanColumn } from './KanbanColumn';
 import { TaskModal } from './TaskModal';
+import { ConfirmTransitionModal } from './ConfirmTransitionModal';
 import { sortTasksChronologically } from '../utils/kanbanUtils';
 import * as kanbanApi from '../api/kanbanApi';
 import { Plus } from 'lucide-react';
@@ -16,7 +17,7 @@ export const KanbanBoard = () => {
   const [tasks, setTasks] = useState([]);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [feedbackMsg, setFeedbackMsg] = useState('');
-  
+
   const [activeCollection, setActiveCollection] = useState(() => {
     return localStorage.getItem('eletrokanban_active_collection') || 'pendencias';
   });
@@ -25,6 +26,7 @@ export const KanbanBoard = () => {
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState(null);
+  const [pendingTransition, setPendingTransition] = useState(null);
 
   const showFeedback = (msg) => {
     setFeedbackMsg(msg);
@@ -41,9 +43,7 @@ export const KanbanBoard = () => {
     }
   };
 
-  useEffect(() => {
-    fetchTasks();
-  }, []);
+  useEffect(() => { fetchTasks(); }, []);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -77,35 +77,111 @@ export const KanbanBoard = () => {
     setIsModalOpen(true);
   };
 
-  const handleMoveTask = async (taskId, novoEstado) => {
+  // ---------------------------------------------------------- transições
+  const executeMove = async (taskId, novoEstado, extraPayload = {}) => {
     const task = tasks.find((t) => String(t.id) === String(taskId));
     if (!task) return;
+    const snapshot = { estado: task.estado, data_prevista: task.data_prevista };
 
-    if (['a_fazer', 'em_andamento'].includes(novoEstado) && !task.data_prevista) {
-      showFeedback("Ação negada: Para mover a tarefa para 'A fazer' ou 'Em andamento', defina uma Data Prevista.");
-      return;
-    }
-
-    if (novoEstado === 'concluido') {
-      const resSub = task.subtarefas?.find((s) => s.tipo === 'resultado');
-      if (resSub && !resSub.opcao_selecionada && !resSub.concluida) {
-        showFeedback("Ação negada: Preencha a subtarefa de Resultado antes de concluir a negociação.");
-        return;
-      }
-    }
-
-    const oldState = task.estado;
-    setTasks((prev) => prev.map((t) => (String(t.id) === String(taskId) ? { ...t, estado: novoEstado } : t)));
+    setTasks((prev) =>
+      prev.map((t) =>
+        String(t.id) === String(taskId)
+          ? { ...t, estado: novoEstado, ...extraPayload }
+          : t
+      )
+    );
 
     try {
-      await kanbanApi.updateTask(taskId, { estado: novoEstado });
+      await kanbanApi.updateTask(taskId, { estado: novoEstado, ...extraPayload });
     } catch (err) {
-      setTasks((prev) => prev.map((t) => (String(t.id) === String(taskId) ? { ...t, estado: oldState } : t)));
+      setTasks((prev) =>
+        prev.map((t) => (String(t.id) === String(taskId) ? { ...t, ...snapshot } : t))
+      );
       const detail = err.response?.data?.detail || "Erro no servidor ao atualizar a coleção.";
       showFeedback(detail);
     }
   };
 
+  const handleMoveTask = async (taskId, novoEstado) => {
+    const task = tasks.find((t) => String(t.id) === String(taskId));
+    if (!task) return;
+    if (task.estado === novoEstado) return;
+
+    // Reabertura: tarefa em Concluído
+    if (task.estado === 'concluido') {
+      if (novoEstado === 'pendencias') {
+        showFeedback("Ação negada: Reabra a tarefa para 'A fazer' ou 'Em andamento'.");
+        return;
+      }
+      setPendingTransition({ type: 'reabrir', task, destino: novoEstado });
+      return;
+    }
+
+    // Data obrigatória em A fazer / Em andamento (RN-09): abre popup para definir
+    if (['a_fazer', 'em_andamento'].includes(novoEstado) && !task.data_prevista) {
+      setPendingTransition({ type: 'definir_data', task, destino: novoEstado });
+      return;
+    }
+
+    // Concluir: popup obrigatório (RN-04 / RF-17)
+    if (novoEstado === 'concluido') {
+      setPendingTransition({ type: 'concluir', task, destino: novoEstado });
+      return;
+    }
+
+    // Voltar para Pendências (RN-04 / RF-15)
+    if (novoEstado === 'pendencias' && ['a_fazer', 'em_andamento'].includes(task.estado)) {
+      setPendingTransition({ type: 'voltar_pendencias', task, destino: novoEstado });
+      return;
+    }
+
+    await executeMove(taskId, novoEstado);
+  };
+
+  const handleConfirmTransition = async (payload) => {
+    const pt = pendingTransition;
+    if (!pt) return;
+    setPendingTransition(null);
+
+    if (pt.type === 'reabrir') {
+      try {
+        await kanbanApi.reabrirTask(pt.task.id, payload);
+        fetchTasks();
+      } catch (err) {
+        showFeedback(err.response?.data?.detail || "Erro ao reabrir a tarefa.");
+      }
+      return;
+    }
+
+    if (pt.type === 'definir_data') {
+      await executeMove(pt.task.id, pt.destino, { data_prevista: payload.data_prevista });
+      return;
+    }
+
+    if (pt.type === 'concluir') {
+      const resSub = pt.task.subtarefas?.find((s) => s.tipo === 'resultado');
+      if (resSub) {
+        try {
+          await kanbanApi.updateSubtarefa(resSub.id, {
+            opcao_selecionada: payload.resultado,
+            concluida: payload.resultado === 'Concluída',
+          });
+        } catch (err) {
+          showFeedback(err.response?.data?.detail || "Erro ao registrar o resultado.");
+          return;
+        }
+      }
+    }
+
+    const extra = pt.type === 'voltar_pendencias' ? { data_prevista: null } : {};
+    await executeMove(pt.task.id, pt.destino, extra);
+
+    if (pt.type === 'concluir') {
+      await fetchTasks();
+    }
+  };
+
+  // ---------------------------------------------------------- subtarefas
   const handleToggleSubtarefa = async (taskId, subId, currentConcluida) => {
     const newConcluida = !currentConcluida;
     setTasks((prev) =>
@@ -113,11 +189,12 @@ export const KanbanBoard = () => {
         if (String(t.id) !== String(taskId)) return t;
         return {
           ...t,
-          subtarefas: t.subtarefas.map((s) => (String(s.id) === String(subId) ? { ...s, concluida: newConcluida } : s))
+          subtarefas: t.subtarefas.map((s) =>
+            String(s.id) === String(subId) ? { ...s, concluida: newConcluida } : s
+          ),
         };
       })
     );
-
     try {
       await kanbanApi.updateSubtarefa(subId, { concluida: newConcluida });
     } catch (err) {
@@ -133,12 +210,13 @@ export const KanbanBoard = () => {
         return {
           ...t,
           subtarefas: t.subtarefas.map((s) =>
-            String(s.id) === String(subId) ? { ...s, opcao_selecionada: optionValue, concluida: isDone } : s
-          )
+            String(s.id) === String(subId)
+              ? { ...s, opcao_selecionada: optionValue, concluida: isDone }
+              : s
+          ),
         };
       })
     );
-
     try {
       await kanbanApi.updateSubtarefa(subId, { opcao_selecionada: optionValue, concluida: isDone });
     } catch (err) {
@@ -149,24 +227,19 @@ export const KanbanBoard = () => {
   const handleAddSubtarefa = async (taskId, text, targetSubId, position) => {
     const task = tasks.find((t) => String(t.id) === String(taskId));
     if (!task) return;
-
     const currentSubs = task.subtarefas || [];
     let insertIndex = currentSubs.length;
-
     if (targetSubId) {
       const idx = currentSubs.findIndex((s) => String(s.id) === String(targetSubId));
-      if (idx !== -1) {
-        insertIndex = position === 'above' ? idx : idx + 1;
-      }
+      if (idx !== -1) insertIndex = position === 'above' ? idx : idx + 1;
     }
-
     try {
       await kanbanApi.createSubtarefa({
         tarefa: parseInt(taskId, 10),
         texto: text,
         tipo: 'livre',
         ordem: insertIndex + 1,
-        concluida: false
+        concluida: false,
       });
       fetchTasks();
     } catch (err) {
@@ -192,7 +265,6 @@ export const KanbanBoard = () => {
     const subs = [...task.subtarefas];
     const index = subs.findIndex((s) => String(s.id) === String(subId));
     if (index === -1) return;
-
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= subs.length) return;
 
@@ -201,36 +273,27 @@ export const KanbanBoard = () => {
     subs[targetIndex] = temp;
 
     const updatedSubs = subs.map((s, i) => ({ ...s, ordem: i + 1 }));
-
     setTasks((prev) =>
       prev.map((t) => (String(t.id) === String(taskId) ? { ...t, subtarefas: updatedSubs } : t))
     );
-
     try {
-      await Promise.all(
-        updatedSubs.map((s) => kanbanApi.updateSubtarefa(s.id, { ordem: s.ordem }))
-      );
+      await Promise.all(updatedSubs.map((s) => kanbanApi.updateSubtarefa(s.id, { ordem: s.ordem })));
     } catch (err) {
       fetchTasks();
     }
   };
 
+  // ---------------------------------------------------------- render
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
         <button
           onClick={handleOpenCreateModal}
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            backgroundColor: '#2563eb',
-            color: '#ffffff',
-            border: 'none',
-            padding: '0.6rem 1.2rem',
-            borderRadius: '6px',
-            fontWeight: '600',
-            cursor: 'pointer'
+            display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+            backgroundColor: '#2563eb', color: '#ffffff', border: 'none',
+            padding: '0.6rem 1.2rem', borderRadius: '6px',
+            fontWeight: '600', cursor: 'pointer',
           }}
         >
           <Plus size={18} /> Nova Tarefa
@@ -248,15 +311,10 @@ export const KanbanBoard = () => {
                   key={col.id}
                   onClick={() => setActiveCollection(col.id)}
                   style={{
-                    flex: 1,
-                    padding: '0.6rem 0.25rem',
-                    borderRadius: '6px',
-                    border: 'none',
-                    backgroundColor: isActive ? col.color : '#e5e7eb',
+                    flex: 1, padding: '0.6rem 0.25rem', borderRadius: '6px',
+                    border: 'none', backgroundColor: isActive ? col.color : '#e5e7eb',
                     color: isActive ? '#ffffff' : '#374151',
-                    fontWeight: 'bold',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer'
+                    fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer',
                   }}
                 >
                   {col.title} ({count})
@@ -264,7 +322,6 @@ export const KanbanBoard = () => {
               );
             })}
           </div>
-
           <KanbanColumn
             collection={COLLECTIONS.find((c) => c.id === activeCollection)}
             tasks={tasks.filter((t) => t.estado === activeCollection)}
@@ -277,6 +334,7 @@ export const KanbanBoard = () => {
             onDeleteSubtarefa={handleDeleteSubtarefa}
             onReorderSubtarefa={handleReorderSubtarefa}
             onEditTask={handleOpenEditModal}
+            onReopenTask={(task) => setPendingTransition({ type: 'reabrir', task })}
             collections={COLLECTIONS}
           />
         </div>
@@ -296,6 +354,7 @@ export const KanbanBoard = () => {
               onDeleteSubtarefa={handleDeleteSubtarefa}
               onReorderSubtarefa={handleReorderSubtarefa}
               onEditTask={handleOpenEditModal}
+              onReopenTask={(task) => setPendingTransition({ type: 'reabrir', task })}
               collections={COLLECTIONS}
             />
           ))}
@@ -305,33 +364,29 @@ export const KanbanBoard = () => {
       {isModalOpen && (
         <TaskModal
           task={taskToEdit}
-          onClose={() => {
-            setIsModalOpen(false);
-            setTaskToEdit(null);
-          }}
+          onClose={() => { setIsModalOpen(false); setTaskToEdit(null); }}
           onTaskSaved={fetchTasks}
         />
       )}
 
-      {/* Componente visual de notificação acessível substituindo o window.alert */}
+      {pendingTransition && (
+        <ConfirmTransitionModal
+          transition={pendingTransition}
+          onCancel={() => setPendingTransition(null)}
+          onConfirm={handleConfirmTransition}
+        />
+      )}
+
       {feedbackMsg && (
         <div
           aria-live="assertive"
           style={{
-            position: 'fixed',
-            bottom: '24px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            backgroundColor: '#1f2937',
-            color: '#ffffff',
-            padding: '0.75rem 1.25rem',
-            borderRadius: '6px',
+            position: 'fixed', bottom: '24px', left: '50%',
+            transform: 'translateX(-50%)', backgroundColor: '#1f2937',
+            color: '#ffffff', padding: '0.75rem 1.25rem', borderRadius: '6px',
             boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
-            zIndex: 9999,
-            fontWeight: '500',
-            fontSize: '0.9rem',
-            textAlign: 'center',
-            maxWidth: '90vw'
+            zIndex: 9999, fontWeight: '500', fontSize: '0.9rem',
+            textAlign: 'center', maxWidth: '90vw',
           }}
         >
           {feedbackMsg}

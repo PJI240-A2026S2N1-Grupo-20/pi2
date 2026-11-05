@@ -20,40 +20,105 @@ html, body {
   padding: 1rem;
 }
 
-/* ---------- Ferramentas de Acessibilidade (RF-33) ---------- */
+/* ============================================================
+   Ferramentas de Acessibilidade (RF-33)
+   ============================================================ */
 
 /* 1. Escala de Cinza */
 html.a11y-grayscale body {
   filter: grayscale(100%);
 }
 
-/* 2. Alto Contraste (Padrão UNIVESP: Fundo Preto, Texto Branco/Amarelo, sem cores) */
+/* 2. Alto Contraste
+   Estratégia:
+   - Define cor/fundo UMA vez no html/body.
+   - Todo o resto HERDA (color: inherit), sem repetir !important em cada tag.
+   - -webkit-text-fill-color acompanha o color (currentColor), para não
+     conflitar com o preenchimento nativo do Chromium em inputs/buttons.
+   - Containers estruturais recuperam fundo preto sólido (evita transparências).
+*/
+html.a11y-high-contrast,
 html.a11y-high-contrast body {
   background-color: #000000 !important;
+  background-image: none !important;
   color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
 }
 
-html.a11y-high-contrast body * {
-  background-color: #000000 !important;
-  color: #ffffff !important;
+html.a11y-high-contrast body *,
+html.a11y-high-contrast body *::before,
+html.a11y-high-contrast body *::after {
+  background-image: none !important;
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
   border-color: #ffff00 !important;
   box-shadow: none !important;
+  text-shadow: none !important;
 }
 
-/* Botões e Links no Alto Contraste */
+/* Recupera o preto sólido em containers estruturais (evita "buracos") */
+html.a11y-high-contrast body div,
+html.a11y-high-contrast body main,
+html.a11y-high-contrast body header,
+html.a11y-high-contrast body section,
+html.a11y-high-contrast body article,
+html.a11y-high-contrast body nav,
+html.a11y-high-contrast body form,
+html.a11y-high-contrast body ul,
+html.a11y-high-contrast body ol,
+html.a11y-high-contrast body li {
+  background-color: #000000 !important;
+}
+
+/* Elementos interativos: amarelo sobre preto (contraste WCAG AAA) */
 html.a11y-high-contrast button,
 html.a11y-high-contrast a,
 html.a11y-high-contrast [role="button"],
-html.a11y-high-contrast select {
+html.a11y-high-contrast [role="menuitem"],
+html.a11y-high-contrast [role="menuitemradio"],
+html.a11y-high-contrast [role="menuitemcheckbox"],
+html.a11y-high-contrast select,
+html.a11y-high-contrast input,
+html.a11y-high-contrast textarea {
   background-color: #000000 !important;
   color: #ffff00 !important;
+  -webkit-text-fill-color: #ffff00 !important;
   border: 2px solid #ffff00 !important;
 }
 
-/* Ícones no Alto Contraste */
+/* Option do sistema (dropdown nativo) */
+html.a11y-high-contrast option {
+  background-color: #000000 !important;
+  color: #ffff00 !important;
+  -webkit-text-fill-color: #ffff00 !important;
+}
+
+/* Botões desabilitados: mantém amarelo, mas reduz a opacidade do texto */
+html.a11y-high-contrast button:disabled,
+html.a11y-high-contrast select:disabled,
+html.a11y-high-contrast input:disabled {
+  color: #ffff00 !important;
+  -webkit-text-fill-color: #ffff00 !important;
+  opacity: 1 !important;
+}
+
+/* Placeholder */
+html.a11y-high-contrast ::placeholder {
+  color: #ffff00 !important;
+  -webkit-text-fill-color: #ffff00 !important;
+  opacity: 0.7 !important;
+}
+
+/* Ícones SVG */
 html.a11y-high-contrast svg {
   color: #ffff00 !important;
   stroke: #ffff00 !important;
+  fill: none !important;
+}
+
+html.a11y-high-contrast svg * {
+  stroke: #ffff00 !important;
+  fill: none !important;
 }
 
 /* 3. Contraste Negativo (Inverte as cores, mantendo os matizes) */

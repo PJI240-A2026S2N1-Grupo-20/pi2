@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
 
+
 class Contato(models.Model):
     TIPO_CHOICES = (
         ('cliente', 'Cliente'),
@@ -18,6 +19,7 @@ class Contato(models.Model):
 
     def __str__(self):
         return self.nome or self.email or self.telefone or "Contato Sem Nome"
+
     @property
     def nome_exibicao(self):
         return str(self)
@@ -64,6 +66,8 @@ class Tarefa(models.Model):
     )
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, blank=True)
     data_prevista = models.DateField(null=True, blank=True)
+    data_real_inicio = models.DateTimeField(null=True, blank=True)
+    data_conclusao = models.DateTimeField(null=True, blank=True)
     observacoes = models.TextField(blank=True, default='')
     criado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -130,6 +134,30 @@ class Subtarefa(models.Model):
         if self.tipo == 'resultado':
             raise ValidationError("A subtarefa de resultado é obrigatória e não pode ser excluída.")
         super().delete(*args, **kwargs)
+
+
+class Transicao(models.Model):
+    """RF-29: registro imutável das movimentações entre coleções."""
+    tarefa = models.ForeignKey(Tarefa, on_delete=models.CASCADE, related_name='transicoes')
+    origem = models.CharField(max_length=20, choices=Tarefa.ESTADO_CHOICES)
+    destino = models.CharField(max_length=20, choices=Tarefa.ESTADO_CHOICES)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    justificativa = models.TextField(blank=True, default='')
+    resultado_snapshot = models.CharField(max_length=255, blank=True, default='')
+    data_hora = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-data_hora']
+        verbose_name = 'Transição'
+        verbose_name_plural = 'Transições'
+
+    def __str__(self):
+        return f"{self.tarefa_id}: {self.origem} -> {self.destino}"
 
 
 def validar_pdf(file):
