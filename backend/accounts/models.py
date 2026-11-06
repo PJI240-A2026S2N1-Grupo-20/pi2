@@ -1,5 +1,19 @@
+from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
-from django.contrib.auth.models import AbstractUser
+
+
+class UsuarioManager(UserManager):
+    """Garante que o superusuário criado via createsuperuser seja administrador.
+
+    Sem isso, o campo `papel` cai no default (`vendedor`) e o frontend
+    esconde funcionalidades de administração, apesar de `is_superuser`
+    e `is_staff` estarem corretos.
+    """
+
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        extra_fields.setdefault('papel', 'administrador')
+        return super().create_superuser(username, email, password, **extra_fields)
+
 
 class Usuario(AbstractUser):
     PAPEL_CHOICES = [
@@ -12,8 +26,16 @@ class Usuario(AbstractUser):
     limiar_amarelo_dias = models.IntegerField(null=True, blank=True, help_text="Limiar individual L1 em dias")
     limiar_laranja_dias = models.IntegerField(null=True, blank=True, help_text="Limiar individual L2 em dias")
 
+    objects = UsuarioManager()
+
+    @property
+    def is_admin(self) -> bool:
+        """Papel administrador OU superusuário. Usado pelo frontend e backend."""
+        return self.papel == 'administrador' or self.is_superuser
+
     def __str__(self):
         return f"{self.username} ({self.get_papel_display()})"
+
 
 class ConfiguracaoSistema(models.Model):
     limiar_amarelo_dias = models.IntegerField(default=2, help_text="Limiar global L1 em dias (Padrão: 2)")

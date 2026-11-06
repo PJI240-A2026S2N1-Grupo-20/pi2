@@ -3,11 +3,26 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def env_bool(nome, default=False):
+    valor = os.environ.get(nome)
+    if valor is None:
+        return default
+    return valor.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def env_list(nome, default=None):
+    valor = os.environ.get(nome)
+    if valor is None or valor.strip() == '':
+        return default or []
+    return [item.strip() for item in valor.split(',') if item.strip()]
+
+
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-eletrokanban-key-dev')
 
-DEBUG = True
+DEBUG = env_bool('DJANGO_DEBUG', default=True)
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', default=['*'])
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -62,6 +77,7 @@ DATABASES = {
         'PASSWORD': os.environ.get('DB_PASSWORD', 'eletrokanban'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': os.environ.get('DB_PORT', '5432'),
+        'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '60')),
     }
 }
 
@@ -80,32 +96,39 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT = Path(os.environ.get('DJANGO_STATIC_ROOT', BASE_DIR / 'staticfiles'))
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT', BASE_DIR / 'media'))
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://192.168.66.7:5173',
-]
 
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://192.168.66.7:5173',
-]
+CORS_ALLOWED_ORIGINS = env_list(
+    'DJANGO_CORS_ALLOWED_ORIGINS',
+    default=[
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ],
+)
+
+CSRF_TRUSTED_ORIGINS = env_list(
+    'DJANGO_CSRF_TRUSTED_ORIGINS',
+    default=[
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ],
+)
 
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = env_bool('DJANGO_SESSION_COOKIE_SECURE', default=False)
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = env_bool('DJANGO_CSRF_COOKIE_SECURE', default=False)
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -121,9 +144,6 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'EletroKanban API',
     'DESCRIPTION': 'API REST para o Sistema de Gestão de Negociações EletroKanban',
     'VERSION': '1.2.0',
-    # Origem e destino da transição usam os mesmos choices de Tarefa.ESTADO_CHOICES.
-    # Sem esse override, o drf-spectacular gera dois enums (OrigemEnum e
-    # DestinoEnum) para o mesmo conjunto e emite um aviso.
     'ENUM_NAME_OVERRIDES': {
         'EstadoTarefaEnum': 'kanban.models.Tarefa.ESTADO_CHOICES',
     },

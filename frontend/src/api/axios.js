@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-// Função para extrair o token CSRF dos cookies do navegador
 function getCookie(name) {
   let cookieValue = null;
   if (document.cookie && document.cookie !== '') {
@@ -17,13 +16,14 @@ function getCookie(name) {
 }
 
 const api = axios.create({
-  baseURL: `http://${window.location.hostname}:8000/api`,
+  // Em produção, o nginx encaminha /api para o backend.
+  // Em desenvolvimento, o Vite faz proxy (ver vite.config.js).
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   withCredentials: true,
   xsrfCookieName: 'csrftoken',
   xsrfHeaderName: 'X-CSRFToken',
 });
 
-// Interceptor para injetar o cabeçalho X-CSRFToken em métodos de alteração
 api.interceptors.request.use(
   (config) => {
     const csrfToken = getCookie('csrftoken');

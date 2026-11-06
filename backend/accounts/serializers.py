@@ -3,9 +3,16 @@ from .models import Usuario, ConfiguracaoSistema
 
 
 class UsuarioSerializer(serializers.ModelSerializer):
+    is_admin = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = Usuario
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'papel', 'limiar_amarelo_dias', 'limiar_laranja_dias']
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name', 'papel',
+            'limiar_amarelo_dias', 'limiar_laranja_dias',
+            'is_superuser', 'is_staff', 'is_admin',
+        ]
+        read_only_fields = ['is_superuser', 'is_staff', 'is_admin']
 
 
 class UsuarioResumoSerializer(serializers.ModelSerializer):

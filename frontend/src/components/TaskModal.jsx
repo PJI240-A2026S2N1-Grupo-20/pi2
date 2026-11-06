@@ -29,7 +29,12 @@ const parseValorInput = (s) => {
 
 export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const { user: currentUser } = useAuth();
-  const canAssign = ['subgerente', 'gerente', 'administrador'].includes(currentUser?.papel);
+  // Superusuário (criado por createsuperuser) também pode reatribuir responsáveis.
+  const canAssign = Boolean(
+    currentUser?.is_admin ||
+    currentUser?.is_superuser ||
+    ['subgerente', 'gerente', 'administrador'].includes(currentUser?.papel)
+  );
 
   const [contatos, setContatos] = useState([]);
   const [fluxos, setFluxos] = useState([]);

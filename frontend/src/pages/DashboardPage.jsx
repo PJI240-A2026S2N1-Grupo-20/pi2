@@ -12,6 +12,9 @@ export const DashboardPage = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [abaAtiva, setAbaAtiva] = useState('quadro');
 
+  // Superusuário ou papel administrador. Cobre createsuperuser sem papel.
+  const isAdmin = Boolean(user?.is_admin || user?.is_superuser || user?.papel === 'administrador');
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', handleResize);
@@ -58,7 +61,7 @@ export const DashboardPage = () => {
           width: isMobile ? '100%' : 'auto',
           justifyContent: isMobile ? 'space-between' : 'flex-end'
         }}>
-          {user?.papel === 'administrador' && (
+          {isAdmin && (
             <button
               onClick={() => setIsFluxoModalOpen(true)}
               style={{
@@ -117,7 +120,6 @@ export const DashboardPage = () => {
           alignItems: isMobile ? 'stretch' : 'center',
           gap: '0.75rem'
         }}>
-          {/* Título (flex: 1 garante que a nav fique centralizada no desktop) */}
           <div style={{ flex: 1 }}>
             <h2 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#111827', margin: 0 }}>
               {abaAtiva === 'quadro' ? 'Quadro de Negociações' : 'Métricas Operacionais'}
@@ -129,14 +131,13 @@ export const DashboardPage = () => {
             </p>
           </div>
 
-          {/* Navegação por abas (centralizada em ambos os casos) */}
-          <nav 
-            role="tablist" 
-            aria-label="Seções da aplicação" 
-            style={{ 
-              display: 'flex', 
-              gap: '0.35rem', 
-              flexWrap: 'wrap', 
+          <nav
+            role="tablist"
+            aria-label="Seções da aplicação"
+            style={{
+              display: 'flex',
+              gap: '0.35rem',
+              flexWrap: 'wrap',
               justifyContent: 'center',
               padding: isMobile ? '0.5rem 0' : 0
             }}
@@ -159,10 +160,9 @@ export const DashboardPage = () => {
             </button>
           </nav>
 
-          {/* Legenda ou Espaçador (flex: 1 alinha à direita e mantém a nav no centro) */}
-          <div style={{ 
-            flex: 1, 
-            display: 'flex', 
+          <div style={{
+            flex: 1,
+            display: 'flex',
             justifyContent: isMobile ? 'center' : 'flex-end',
             minHeight: '1px'
           }}>

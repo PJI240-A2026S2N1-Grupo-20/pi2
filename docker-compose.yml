@@ -2,15 +2,124 @@ services:
   postgres:
     image: postgres:18.6-alpine
     container_name: eletrokanban_db
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: eletrokanban
-      POSTGRES_USER: eletrokanban
-      POSTGRES_PASSWORD: eletrokanban
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-eletrokanban}
+      POSTGRES_USER: ${POSTGRES_USER:-eletrokanban}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eletrokanban}
     volumes:
       - postgres_data:/var/lib/postgresql
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-eletrokanban} -d ${POSTGRES_DB:-eletrokanban}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eletrokanban_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Defina DJANGO_SECRET_KEY no .env}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-*}
+      DJANGO_CORS_ALLOWED_ORIGINS: ${DJANGO_CORS_ALLOWED_ORIGINS:-}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}
+      DJANGO_SESSION_COOKIE_SECURE: ${DJANGO_SESSION_COOKIE_SECURE:-False}
+      DJANGO_CSRF_COOKIE_SECURE: ${DJANGO_CSRF_COOKIE_SECURE:-False}
+      DB_NAME: ${POSTGRES_DB:-eletrokanban}
+      DB_USER: ${POSTGRES_USER:-eletrokanban}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-eletrokanban}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      BACKEND_PORT: 8000
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-2}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-60}
+    volumes:
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+    ports:
+      - "${BACKEND_PORT_PUBLIC:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    container_name: eletrokanban_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - media_data:/var/www/media:ro
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ---------------------------------------------------------------
+  # Serviços de teste (perfil "test").
+  # Não sobem no docker compose up padrão. São invocados com:
+  #   docker compose --profile test run --rm backend-test
+  #   docker compose --profile test run --rm frontend-test
+  # Reaproveitam o postgres. O Django cria um banco "test_<nome>"
+  # isolado, aplica migrações e descarta ao final.
+  # ---------------------------------------------------------------
+
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: [test]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DJANGO_SECRET_KEY: test-secret-key
+      DJANGO_DEBUG: "True"
+      DJANGO_ALLOWED_HOSTS: "*"
+      DB_NAME: ${POSTGRES_DB:-eletrokanban}
+      DB_USER: ${POSTGRES_USER:-eletrokanban}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-eletrokanban}
+      DB_HOST: postgres
+      DB_PORT: 5432
+    # Limpa o entrypoint de produção (que roda migrate + gunicorn)
+    # e executa apenas a suíte de testes do Django.
+    entrypoint: []
+    command: ["python", "manage.py", "test", "accounts", "kanban", "--verbosity=2"]
+
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      # Usa apenas o estágio "builder" (Node), que contém devDependencies
+      # e código-fonte. Evita subir o nginx só para rodar testes.
+      target: builder
+    profiles: [test]
+    entrypoint: []
+    command: ["npm", "run", "test"]
 
 volumes:
   postgres_data:
+  static_data:
+  media_data:
