@@ -8,6 +8,7 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
   const [nome, setNome] = useState('');
   const [passos, setPassos] = useState([]);
   const [novoPassoTexto, setNovoPassoTexto] = useState('');
+  const [novoPassoOpcoes, setNovoPassoOpcoes] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -35,6 +36,8 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
     setEditingFluxoId(null);
     setNome('');
     setPassos([]);
+    setNovoPassoTexto('');
+    setNovoPassoOpcoes('');
     setError('');
     setSuccess('');
   };
@@ -42,19 +45,48 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
   const handleEdit = (fluxo) => {
     setEditingFluxoId(fluxo.id);
     setNome(fluxo.nome);
-    setPassos(fluxo.passos ? fluxo.passos.map((p, idx) => ({ id: p.id, texto: p.texto, ordem: idx + 1 })) : []);
+    setPassos(
+      fluxo.passos
+        ? fluxo.passos.map((p, idx) => ({
+            id: p.id,
+            texto: p.texto,
+            ordem: idx + 1,
+            opcoes: Array.isArray(p.opcoes) ? p.opcoes : [],
+          }))
+        : []
+    );
+    setNovoPassoTexto('');
+    setNovoPassoOpcoes('');
     setError('');
     setSuccess('');
   };
 
+  const parseOpcoes = (texto) =>
+    String(texto || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
   const handleAddPasso = () => {
     if (!novoPassoTexto.trim()) return;
-    setPassos((prev) => [...prev, { texto: novoPassoTexto.trim(), ordem: prev.length + 1 }]);
+    setPassos((prev) => [
+      ...prev,
+      {
+        texto: novoPassoTexto.trim(),
+        ordem: prev.length + 1,
+        opcoes: parseOpcoes(novoPassoOpcoes),
+      },
+    ]);
     setNovoPassoTexto('');
+    setNovoPassoOpcoes('');
   };
 
   const handleRemovePasso = (index) => {
-    setPassos((prev) => prev.filter((_, i) => i !== index).map((p, i) => ({ ...p, ordem: i + 1 })));
+    setPassos((prev) =>
+      prev
+        .filter((_, i) => i !== index)
+        .map((p, i) => ({ ...p, ordem: i + 1 }))
+    );
   };
 
   const handleMovePasso = (index, direction) => {
@@ -79,16 +111,20 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
     const payload = {
       nome: nome.trim(),
       ativo: true,
-      passos: passos.map((p, idx) => ({ texto: p.texto, ordem: idx + 1 }))
+      passos: passos.map((p, idx) => ({
+        texto: p.texto,
+        ordem: idx + 1,
+        opcoes: Array.isArray(p.opcoes) ? p.opcoes : [],
+      })),
     };
 
     try {
       if (editingFluxoId) {
         await kanbanApi.updateFluxo(editingFluxoId, payload);
-        setSuccess('Fluxo atualizado com sucesso!');
+        setSuccess('Fluxo atualizado com sucesso.');
       } else {
         await kanbanApi.createFluxo(payload);
-        setSuccess('Fluxo criado com sucesso!');
+        setSuccess('Fluxo criado com sucesso.');
       }
       loadFluxos();
       if (onFluxosUpdated) onFluxosUpdated();
@@ -195,21 +231,44 @@ export const FluxoManagerModal = ({ onClose, onFluxosUpdated }) => {
 
             <div style={{ marginBottom: '0.75rem' }}>
               <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>Nome do Fluxo *</label>
-              <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Atendimento Comercial" style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.85rem' }} />
+              <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Atendimento Comercial" style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.85rem' }} />
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '500', color: '#374151', marginBottom: '0.35rem' }}>Passos Pré-definidos (Subtarefas)</label>
-              <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.5rem' }}>
-                <input type="text" value={novoPassoTexto} onChange={(e) => setNovoPassoTexto(e.target.value)} placeholder="Texto do passo..." onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPasso())} style={{ flex: 1, padding: '0.35rem 0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.8rem' }} />
-                <button type="button" onClick={handleAddPasso} style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '0.35rem 0.6rem', fontSize: '0.8rem', cursor: 'pointer' }}>Adicionar</button>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '500', color: '#374151', marginBottom: '0.35rem' }}>Passos Predefinidos (Subtarefas)</label>
+              <div style={{ display: 'grid', gap: '0.35rem', marginBottom: '0.5rem' }}>
+                <input
+                  type="text"
+                  value={novoPassoTexto}
+                  onChange={(e) => setNovoPassoTexto(e.target.value)}
+                  placeholder="Texto do passo..."
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPasso())}
+                  style={{ width: '100%', padding: '0.35rem 0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.8rem' }}
+                />
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  <input
+                    type="text"
+                    value={novoPassoOpcoes}
+                    onChange={(e) => setNovoPassoOpcoes(e.target.value)}
+                    placeholder="Opções do passo, separadas por vírgula (opcional). Ex.: Sim, Não, Pendente"
+                    style={{ flex: 1, padding: '0.35rem 0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.8rem' }}
+                  />
+                  <button type="button" onClick={handleAddPasso} style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '0.35rem 0.6rem', fontSize: '0.8rem', cursor: 'pointer' }}>Adicionar</button>
+                </div>
               </div>
 
               <ol style={{ paddingLeft: '1.25rem', margin: 0, fontSize: '0.8rem' }}>
                 {passos.map((p, idx) => (
                   <li key={idx} style={{ marginBottom: '0.35rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.35rem', backgroundColor: '#f3f4f6', padding: '0.25rem 0.5rem', borderRadius: '4px' }}>
-                      <span style={{ flex: 1 }}>{p.texto}</span>
+                      <div style={{ flex: 1 }}>
+                        <span>{p.texto}</span>
+                        {Array.isArray(p.opcoes) && p.opcoes.length > 0 && (
+                          <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>
+                            Opções: {p.opcoes.join(', ')}
+                          </div>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', gap: '0.15rem' }}>
                         <button type="button" onClick={() => handleMovePasso(idx, 'up')} disabled={idx === 0} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px' }}><ArrowUp size={12} /></button>
                         <button type="button" onClick={() => handleMovePasso(idx, 'down')} disabled={idx === passos.length - 1} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px' }}><ArrowDown size={12} /></button>

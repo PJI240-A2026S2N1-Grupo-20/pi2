@@ -190,24 +190,24 @@ export function extrairSugestoesPdf(texto) {
     return { sugestoes, meta };
   }
 
-  // Normaliza espacos, NBSP, zero-width e quebras de linha.
+  // Normaliza espaços, NBSP, zero-width e quebras de linha.
   const limpo = texto
     .replace(/[\u00a0\u200b\u200d\u2060\ufeff]/g, ' ')
     .replace(/[ \t]+/g, ' ')
     .replace(/\r\n?/g, '\n');
 
-  // Numero do orcamento: aceita Nº/N° (símbolo ordinal) ou No. (abreviacao
-  // com ponto final). Nao aceita 'NO' dentro de palavras como MANOEL.
+  // Número do orçamento: aceita Nº/N° (símbolo ordinal) ou No. (abreviação
+  // com ponto final). Não aceita 'NO' dentro de palavras como MANOEL.
   const labelNum = /(?:N\s*[º°]|\bNo\.)\s*[:.\-]?/i;
 
-  // 1) Padrao 'Nº: 473528' (label primeiro, numero depois).
+  // 1) Padrão 'Nº: 473528' (rótulo primeiro, número depois).
   const mApos = limpo.match(
     new RegExp(labelNum.source + '\\s*(\\d{4,})(?![\\d\\/:])', 'i')
   );
   if (mApos) {
     sugestoes.numero_orcamento = mApos[1];
   } else {
-    // 2) Padrao '473528 Nº:' (pdfjs as vezes inverte a ordem).
+    // 2) Padrão '473528 Nº:' (pdfjs às vezes inverte a ordem).
     const mAntes = limpo.match(
       new RegExp('(?<![\\d\\/:])(\\d{4,})\\s*' + labelNum.source, 'i')
     );
@@ -216,7 +216,7 @@ export function extrairSugestoesPdf(texto) {
     }
   }
 
-  // Emissao
+  // Emissão
   const mEmissao = limpo.match(
     /Emiss[ãa]o\s*[:.\-]?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i
   );
@@ -234,7 +234,7 @@ export function extrairSugestoesPdf(texto) {
     meta.vendedor_nome = mVend[2].trim();
   }
 
-  // Cliente - multiplas estrategias de extracao.
+  // Cliente - múltiplas estratégias de extração.
   const extrairCliente = () => {
     // 1) Linha por linha: robusto contra quebras e fragmentos do pdfjs.
     const linhas = limpo.split('\n');
@@ -274,8 +274,8 @@ export function extrairSugestoesPdf(texto) {
     meta.cliente_nome = limparNomeCliente(clienteExtraido.nome || '');
   }
 
-  // Valores: exige formato BR (com virgula). Isso evita casar com
-  // "VI.Total12474" do cabecalho de tabela (12474 nao tem virgula).
+  // Valores: exige formato BR (com vírgula). Isso evita casar com
+  // "VI.Total12474" do cabeçalho de tabela (12474 não tem vírgula).
   const extrairValor = (rotulo) => {
     const r1 = new RegExp(
       `V\\s*[IÍiLl1]?\\s*\\.?\\s*${rotulo}\\s*[:.\\-]?\\s*([\\d.]+,\\d{1,2})`,
@@ -315,8 +315,8 @@ export function extrairSugestoesPdf(texto) {
     if (iso) sugestoes.validade_orcamento = iso;
   }
 
-  // Se algum campo de orcamento foi reconhecido, ou se o texto menciona
-  // "orcamento", sugere o fluxo comercial.
+  // Se algum campo de orçamento foi reconhecido, ou se o texto menciona
+  // "orçamento", sugere o fluxo comercial.
   const algumCampo =
     sugestoes.numero_orcamento ||
     sugestoes.validade_orcamento ||

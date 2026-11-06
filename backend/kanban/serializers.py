@@ -1,4 +1,7 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
+
 from .models import (
     Contato, Fluxo, PassoFluxo, Tarefa, Subtarefa, Transicao, Anexo, Auditoria
 )
@@ -13,10 +16,15 @@ class ContatoSerializer(serializers.ModelSerializer):
 
 class PassoFluxoSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(required=False)
+    opcoes = serializers.ListField(
+        child=serializers.CharField(max_length=100),
+        required=False,
+        allow_empty=True,
+    )
 
     class Meta:
         model = PassoFluxo
-        fields = ['id', 'texto', 'ordem']
+        fields = ['id', 'texto', 'ordem', 'opcoes']
 
 
 class FluxoSerializer(serializers.ModelSerializer):
@@ -33,7 +41,8 @@ class FluxoSerializer(serializers.ModelSerializer):
             PassoFluxo.objects.create(
                 fluxo=fluxo,
                 texto=passo.get('texto'),
-                ordem=passo.get('ordem', i + 1)
+                ordem=passo.get('ordem', i + 1),
+                opcoes=list(passo.get('opcoes') or []),
             )
         return fluxo
 
@@ -49,7 +58,8 @@ class FluxoSerializer(serializers.ModelSerializer):
                 PassoFluxo.objects.create(
                     fluxo=instance,
                     texto=passo.get('texto'),
-                    ordem=i + 1
+                    ordem=i + 1,
+                    opcoes=list(passo.get('opcoes') or []),
                 )
         return instance
 
@@ -59,7 +69,11 @@ class SubtarefaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Subtarefa
-        fields = ['id', 'tarefa', 'texto', 'concluida', 'ordem', 'tipo', 'opcao_selecionada']
+        fields = [
+            'id', 'tarefa', 'texto', 'opcoes', 'concluida',
+            'ordem', 'tipo', 'opcao_selecionada',
+        ]
+        read_only_fields = ['opcoes']
 
 
 class TransicaoSerializer(serializers.ModelSerializer):
@@ -102,7 +116,8 @@ class AnexoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'nome', 'tamanho', 'url', 'enviado_em']
 
-    def get_url(self, obj):
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_url(self, obj) -> str:
         if not obj.arquivo:
             return None
         request = self.context.get('request')
@@ -121,7 +136,7 @@ class TarefaSerializer(serializers.ModelSerializer):
     auditorias = AuditoriaSerializer(many=True, read_only=True)
     anexos = AnexoSerializer(many=True, read_only=True)
     fluxo_nome = serializers.ReadOnlyField(source='fluxo.nome', default=None)
-    contato_nome = serializers.ReadOnlyField(source='contato.nome_exibicao', default=None)
+    contato_nome = serializers.SerializerMethodField()
     contato_email = serializers.SerializerMethodField()
     contato_telefone = serializers.SerializerMethodField()
     responsavel = serializers.PrimaryKeyRelatedField(
@@ -146,18 +161,25 @@ class TarefaSerializer(serializers.ModelSerializer):
             'data_real_inicio', 'data_conclusao',
         ]
 
-    def get_responsavel_nome(self, obj):
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_contato_nome(self, obj) -> str:
+        return obj.contato.nome_exibicao if obj.contato else None
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_contato_email(self, obj) -> str:
+        return obj.contato.email if obj.contato else ''
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_contato_telefone(self, obj) -> str:
+        return obj.contato.telefone if obj.contato else ''
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_responsavel_nome(self, obj) -> str:
         if obj.responsavel:
             return obj.responsavel.username
         if obj.criado_por:
             return obj.criado_por.username
         return 'Sem responsável'
-
-    def get_contato_email(self, obj):
-        return obj.contato.email if obj.contato else ''
-
-    def get_contato_telefone(self, obj):
-        return obj.contato.telefone if obj.contato else ''
 
     def validate_responsavel(self, value):
         request = self.context.get('request')

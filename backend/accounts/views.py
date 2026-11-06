@@ -4,6 +4,9 @@ from rest_framework import status, permissions
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
+from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+
 from .models import Usuario, ConfiguracaoSistema
 from .serializers import (
     UsuarioSerializer,
@@ -28,6 +31,16 @@ def get_effective_thresholds(user):
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(
+        request=LoginSerializer,
+        responses={
+            200: OpenApiTypes.OBJECT,
+            400: OpenApiTypes.OBJECT,
+            401: OpenApiTypes.OBJECT,
+            403: OpenApiTypes.OBJECT,
+        },
+        description='Autentica o usuário e devolve os dados da sessão mais os limiares efetivos.',
+    )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -52,6 +65,11 @@ class LoginView(APIView):
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        request=None,
+        responses={200: OpenApiTypes.OBJECT},
+        description='Encerra a sessão autenticada atual.',
+    )
     def post(self, request):
         logout(request)
         return Response({'detail': 'Logout realizado com sucesso.'}, status=status.HTTP_200_OK)
@@ -61,6 +79,10 @@ class LogoutView(APIView):
 class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        responses={200: OpenApiTypes.OBJECT},
+        description='Devolve os dados do usuário logado e os limiares efetivos.',
+    )
     def get(self, request):
         user = request.user
         user_data = UsuarioSerializer(user).data
@@ -77,6 +99,10 @@ class ConfiguracaoSistemaView(APIView):
             return [IsAdministrador()]
         return [permissions.IsAuthenticated()]
 
+    @extend_schema(
+        responses={200: ConfiguracaoSistemaSerializer},
+        description='Leitura dos limiares globais de atraso (L1 e L2).',
+    )
     def get(self, request):
         config = ConfiguracaoSistema.objects.first()
         if not config:
@@ -84,6 +110,11 @@ class ConfiguracaoSistemaView(APIView):
         serializer = ConfiguracaoSistemaSerializer(config)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        request=ConfiguracaoSistemaSerializer,
+        responses={200: ConfiguracaoSistemaSerializer, 400: OpenApiTypes.OBJECT},
+        description='Atualização dos limiares globais. Exige papel Administrador.',
+    )
     def put(self, request):
         config = ConfiguracaoSistema.objects.first()
         if not config:
@@ -99,6 +130,10 @@ class UsuarioListView(APIView):
     """Lista usuários ativos para seleção de responsável (RF-13)."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        responses={200: UsuarioResumoSerializer(many=True)},
+        description='Lista usuários ativos com campos mínimos para uso em seletores.',
+    )
     def get(self, request):
         usuarios = Usuario.objects.filter(is_active=True).order_by('username')
         serializer = UsuarioResumoSerializer(usuarios, many=True)

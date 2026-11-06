@@ -5,6 +5,7 @@ import { X, Plus, Search } from 'lucide-react';
 import { DatePickerBR } from './DatePickerBR';
 import { AnexoManager } from './AnexoManager';
 import { EntradaAssistida } from './EntradaAssistida';
+import { formatDateBR } from '../utils/kanbanUtils';
 
 const baseInput = {
   width: '100%',
@@ -74,9 +75,20 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
   const [clienteSugerido, setClienteSugerido] = useState(null);
   const [tarefaCriada, setTarefaCriada] = useState(null);
 
+  // RF-15: tarefa adiada
+  const [registrarAdiada, setRegistrarAdiada] = useState(true);
+  const [originalDataPrevista] = useState(task?.data_prevista || '');
+
   const originalResponsavelId = task?.responsavel ? String(task.responsavel) : '';
   const responsavelAlterado =
     Boolean(task) && canAssign && selectedResponsavel !== originalResponsavelId;
+
+  const dataAlterada = Boolean(
+    task &&
+    originalDataPrevista &&
+    dataPrevista &&
+    dataPrevista !== originalDataPrevista
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -203,6 +215,20 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
     return payload;
   };
 
+  const registrarSubtarefaAdiada = async (tarefaId, novaData) => {
+    try {
+      await kanbanApi.createSubtarefa({
+        tarefa: tarefaId,
+        texto: `Tarefa adiada para ${formatDateBR(novaData)}`,
+        tipo: 'justificativa',
+        ordem: 998,
+        concluida: true,
+      });
+    } catch (err) {
+      console.error('Falha ao registrar subtarefa Tarefa adiada:', err);
+    }
+  };
+
   const submeter = async (extra = {}) => {
     setError('');
     try {
@@ -220,6 +246,10 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
           payload.estado = 'pendencias';
         }
         await kanbanApi.updateTask(task.id, payload);
+
+        if (dataAlterada && registrarAdiada) {
+          await registrarSubtarefaAdiada(task.id, dataPrevista);
+        }
       } else {
         const resposta = await kanbanApi.createTarefa(payload);
         const novaTarefa = resposta.data;
@@ -730,6 +760,38 @@ export const TaskModal = ({ task, onClose, onTaskSaved }) => {
                 onChange={setDataPrevista}
                 style={baseInput}
               />
+
+              {dataAlterada && (
+                <div
+                  style={{
+                    marginTop: '0.5rem',
+                    padding: '0.5rem 0.75rem',
+                    backgroundColor: '#fef3c7',
+                    border: '1px solid #fcd34d',
+                    borderRadius: '4px',
+                    fontSize: '0.8rem',
+                    color: '#92400e',
+                  }}
+                >
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={registrarAdiada}
+                      onChange={(e) => setRegistrarAdiada(e.target.checked)}
+                    />
+                    <span>
+                      Registrar subtarefa "Tarefa adiada" para a nova data
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
 
             <EntradaAssistida onAplicarSugestoes={handleAplicarSugestoes} fluxos={fluxos} />

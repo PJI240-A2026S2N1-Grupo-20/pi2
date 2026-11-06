@@ -47,7 +47,7 @@ export const DashboardPage = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Layout size={22} />
-          <h1 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0 }}>EletroKanban (v1.0.0)</h1>
+          <h1 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0 }}>EletroKanban (v1.2.0)</h1>
         </div>
 
         <div style={{
@@ -113,23 +113,34 @@ export const DashboardPage = () => {
           boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           marginBottom: '1rem',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
           gap: '0.75rem'
         }}>
-          <div>
+          {/* Título (flex: 1 garante que a nav fique centralizada no desktop) */}
+          <div style={{ flex: 1 }}>
             <h2 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#111827', margin: 0 }}>
               {abaAtiva === 'quadro' ? 'Quadro de Negociações' : 'Métricas Operacionais'}
             </h2>
             <p style={{ fontSize: '0.8rem', color: '#6b7280', margin: '0.15rem 0 0 0' }}>
               {abaAtiva === 'quadro'
-                ? 'Gestão adaptada para dispositivos móveis'
+                ? 'Andamento das negociações em curso'
                 : 'Indicadores do processo de vendas e exportação de dados'}
             </p>
           </div>
 
-          <nav role="tablist" aria-label="Seções da aplicação" style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+          {/* Navegação por abas (centralizada em ambos os casos) */}
+          <nav 
+            role="tablist" 
+            aria-label="Seções da aplicação" 
+            style={{ 
+              display: 'flex', 
+              gap: '0.35rem', 
+              flexWrap: 'wrap', 
+              justifyContent: 'center',
+              padding: isMobile ? '0.5rem 0' : 0
+            }}
+          >
             <button
               role="tab"
               aria-selected={abaAtiva === 'quadro'}
@@ -148,22 +159,30 @@ export const DashboardPage = () => {
             </button>
           </nav>
 
-          {abaAtiva === 'quadro' && (
-            <div
-              aria-label="Legenda dos indicadores de atraso"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem', color: '#4b5563', flexWrap: 'wrap' }}
-            >
-              <Clock size={13} color="#6b7280" />
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#f59e0b' }} aria-hidden="true" />
-                L1 = {limiares?.l1 ?? 2}d
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#ea580c' }} aria-hidden="true" />
-                L2 = {limiares?.l2 ?? 5}d
-              </span>
-            </div>
-          )}
+          {/* Legenda ou Espaçador (flex: 1 alinha à direita e mantém a nav no centro) */}
+          <div style={{ 
+            flex: 1, 
+            display: 'flex', 
+            justifyContent: isMobile ? 'center' : 'flex-end',
+            minHeight: '1px'
+          }}>
+            {abaAtiva === 'quadro' && (
+              <div
+                aria-label="Legenda dos indicadores de atraso"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem', color: '#4b5563', flexWrap: 'wrap' }}
+              >
+                <Clock size={13} color="#6b7280" />
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#f59e0b' }} aria-hidden="true" />
+                  L1 = {limiares?.l1 ?? 2}d
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#ea580c' }} aria-hidden="true" />
+                  L2 = {limiares?.l2 ?? 5}d
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {abaAtiva === 'quadro' ? (

@@ -17,11 +17,11 @@ class Contato(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.nome or self.email or self.telefone or "Contato sem nome"
 
     @property
-    def nome_exibicao(self):
+    def nome_exibicao(self) -> str:
         return str(self)
 
 
@@ -31,7 +31,7 @@ class Fluxo(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.nome
 
 
@@ -44,7 +44,7 @@ class PassoFluxo(models.Model):
     class Meta:
         ordering = ['ordem']
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.fluxo.nome} - Passo {self.ordem}: {self.texto}"
 
 
@@ -68,7 +68,7 @@ class Tarefa(models.Model):
     data_prevista = models.DateField(null=True, blank=True)
     numero_orcamento = models.CharField(
         max_length=50, null=True, blank=True, db_index=True,
-        help_text='Numero do orcamento associado a tarefa (RF-25/RF-26).'
+        help_text='Número do orçamento associado à tarefa (RF-25/RF-26).'
     )
     validade_orcamento = models.DateField(null=True, blank=True)
     vl_produtos = models.DecimalField(
@@ -113,7 +113,8 @@ class Tarefa(models.Model):
                         texto=passo.texto,
                         ordem=passo.ordem,
                         tipo='fluxo',
-                        opcao_selecionada=None
+                        opcoes=list(passo.opcoes or []),
+                        opcao_selecionada=None,
                     )
             Subtarefa.objects.create(
                 tarefa=self,
@@ -122,7 +123,7 @@ class Tarefa(models.Model):
                 ordem=999
             )
 
-    def __str__(self):
+    def __str__(self) -> str:
         fluxo_nome = self.fluxo.nome if self.fluxo else ''
         contato_nome = str(self.contato) if self.contato else 'Contato não definido'
         if fluxo_nome:
@@ -139,6 +140,7 @@ class Subtarefa(models.Model):
     )
     tarefa = models.ForeignKey(Tarefa, on_delete=models.CASCADE, related_name='subtarefas')
     texto = models.CharField(max_length=255)
+    opcoes = models.JSONField(default=list, blank=True)
     opcao_selecionada = models.CharField(max_length=255, null=True, blank=True)
     concluida = models.BooleanField(default=False)
     ordem = models.IntegerField(default=0)
@@ -173,7 +175,7 @@ class Transicao(models.Model):
         verbose_name = 'Transição'
         verbose_name_plural = 'Transições'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.tarefa_id}: {self.origem} -> {self.destino}"
 
 
@@ -205,7 +207,7 @@ class Anexo(models.Model):
 class Auditoria(models.Model):
     """RF-28 e RN-10: trilha imutável de modificações relevantes da tarefa.
 
-    Cada registro guarda snapshots anteriores/posteriores em JSONB, o usuário
+    Cada registro guarda snapshots anteriores e posteriores em JSONB, o usuário
     responsável pela ação e, quando aplicável, uma justificativa textual.
     """
     TIPO_CHOICES = (
@@ -238,7 +240,7 @@ class Auditoria(models.Model):
         verbose_name = 'Auditoria'
         verbose_name_plural = 'Auditorias'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             f"Tarefa {self.tarefa_id}: {self.get_tipo_modificacao_display()} "
             f"em {self.data_hora:%d/%m/%Y %H:%M}"

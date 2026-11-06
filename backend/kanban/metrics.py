@@ -1,4 +1,4 @@
-"""Metricas operacionais e exportacao em CSV (RF-31 e RF-32)."""
+"""Métricas operacionais e exportação em CSV (RF-31 e RF-32)."""
 import csv
 import io
 from datetime import date
@@ -67,7 +67,7 @@ def _tempo_medio_ciclo_dias(queryset):
 
 
 def calcular_metricas(queryset, data_inicio=None, data_fim=None):
-    """Calcula o pacote de metricas operacionais do quadro."""
+    """Calcula o pacote de métricas operacionais do quadro."""
     inicio = _parse_data(data_inicio)
     fim = _parse_data(data_fim)
 
@@ -122,7 +122,7 @@ def _aplicar_periodo(queryset, data_inicio, data_fim, campo_data):
 
 
 def exportar_tarefas_csv(queryset, data_inicio=None, data_fim=None):
-    """Gera texto CSV (separador ponto e virgula, BOM UTF-8) das tarefas."""
+    """Gera texto CSV (separador ponto e vírgula, BOM UTF-8) das tarefas."""
     queryset = _aplicar_periodo(queryset, data_inicio, data_fim, 'criado_em')
 
     buffer = io.StringIO()
@@ -157,7 +157,7 @@ def exportar_tarefas_csv(queryset, data_inicio=None, data_fim=None):
 
 
 def exportar_transicoes_csv(queryset, data_inicio=None, data_fim=None):
-    """Gera texto CSV (separador ponto e virgula, BOM UTF-8) das transicoes."""
+    """Gera texto CSV (separador ponto e vírgula, BOM UTF-8) das transições."""
     ids = list(queryset.values_list('id', flat=True))
     transicoes = (
         Transicao.objects

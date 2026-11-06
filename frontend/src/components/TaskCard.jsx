@@ -482,6 +482,7 @@ export const TaskCard = ({
                 const isInsertingBelow = insertingForSubId === sub.id && insertPosition === 'below';
                 const isFirst = index === 0;
                 const isLast = index === (task.subtarefas.length - 1);
+                const hasOptions = Array.isArray(sub.opcoes) && sub.opcoes.length > 0;
 
                 return (
                   <React.Fragment key={sub.id}>
@@ -523,6 +524,43 @@ export const TaskCard = ({
                               <option value="Cancelada">Cancelada</option>
                             </select>
                           </div>
+                        </div>
+                      ) : hasOptions ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, marginRight: '0.5rem', flexWrap: 'wrap' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={sub.concluida || sub.opcao_selecionada === 'Concluída'}
+                              onChange={() => onToggleSubtarefa(task.id, sub.id, sub.concluida)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            <span style={{
+                              textDecoration: sub.concluida ? 'line-through' : 'none',
+                              color: sub.concluida ? '#9ca3af' : '#374151',
+                              fontSize: '0.825rem',
+                            }}>
+                              {sub.texto}
+                            </span>
+                          </label>
+                          <select
+                            aria-label={`Selecionar opção para ${sub.texto}`}
+                            value={sub.opcao_selecionada || ''}
+                            onChange={(e) =>
+                              onUpdateSubtarefaOption(task.id, sub.id, e.target.value)
+                            }
+                            style={{
+                              padding: '0.2rem 0.4rem',
+                              borderRadius: '4px',
+                              border: '1px solid #d1d5db',
+                              fontSize: '0.8rem',
+                              backgroundColor: '#fff',
+                            }}
+                          >
+                            <option value="">[Selecione]</option>
+                            {sub.opcoes.map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
                         </div>
                       ) : (
                         <label

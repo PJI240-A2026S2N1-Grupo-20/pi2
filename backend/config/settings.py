@@ -120,5 +120,11 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'EletroKanban API',
     'DESCRIPTION': 'API REST para o Sistema de Gestão de Negociações EletroKanban',
-    'VERSION': '1.0.0',
+    'VERSION': '1.2.0',
+    # Origem e destino da transição usam os mesmos choices de Tarefa.ESTADO_CHOICES.
+    # Sem esse override, o drf-spectacular gera dois enums (OrigemEnum e
+    # DestinoEnum) para o mesmo conjunto e emite um aviso.
+    'ENUM_NAME_OVERRIDES': {
+        'EstadoTarefaEnum': 'kanban.models.Tarefa.ESTADO_CHOICES',
+    },
 }

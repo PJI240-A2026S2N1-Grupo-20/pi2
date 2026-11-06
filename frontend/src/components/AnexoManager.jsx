@@ -15,11 +15,11 @@ const formatBytes = (bytes) => {
 /**
  * Gerenciador de anexos em PDF.
  *
- * Dois modos de operacao:
- *  - Gerenciado (padrao): recebe tarefaId, faz upload imediato para
+ * Dois modos de operação:
+ *  - Gerenciado (padrão): recebe tarefaId, faz upload imediato para
  *    POST /api/kanban/tarefas/{id}/anexos/ e permite remover via DELETE.
  *  - Staging: recebe arquivosPendentes + onArquivosChange. Apenas acumula
- *    File[] em memoria. O upload ocorre depois que a tarefa e criada.
+ *    File[] em memória. O upload ocorre depois que a tarefa é criada.
  */
 export const AnexoManager = ({
   tarefaId,
@@ -40,13 +40,13 @@ export const AnexoManager = ({
 
   const validarArquivo = (file) => {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
-      return 'Apenas arquivos em formato PDF sao aceitos.';
+      return 'Apenas arquivos em formato PDF são aceitos.';
     }
     if (file.size > MAX_FILE_SIZE) {
       return 'O arquivo excede o limite de 25 MB.';
     }
     if (total >= MAX_ANEXOS) {
-      return 'Limite de 20 anexos por tarefa ja atingido.';
+      return 'Limite de 20 anexos por tarefa já atingido.';
     }
     return null;
   };
@@ -173,7 +173,7 @@ export const AnexoManager = ({
             fontStyle: 'italic',
           }}
         >
-          Os arquivos serao enviados automaticamente apos a criacao da tarefa.
+          Os arquivos serão enviados automaticamente após a criação da tarefa.
         </p>
       )}
 

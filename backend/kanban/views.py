@@ -6,6 +6,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 
 from .models import (
     Contato, Fluxo, Tarefa, Subtarefa, Transicao, Anexo, Auditoria, validar_pdf,
@@ -33,6 +35,24 @@ TRANSICOES_PERMITIDAS = {
 }
 
 
+PARAMETROS_PERIODO = [
+    OpenApiParameter(
+        name='data_inicio',
+        type=OpenApiTypes.DATE,
+        location=OpenApiParameter.QUERY,
+        description='Data inicial no formato AAAA-MM-DD.',
+        required=False,
+    ),
+    OpenApiParameter(
+        name='data_fim',
+        type=OpenApiTypes.DATE,
+        location=OpenApiParameter.QUERY,
+        description='Data final no formato AAAA-MM-DD.',
+        required=False,
+    ),
+]
+
+
 def _apenas_digitos(valor):
     return ''.join(c for c in (valor or '') if c.isdigit())
 
@@ -40,7 +60,7 @@ def _apenas_digitos(valor):
 def _encontrar_contato_duplicado(nome, email, telefone, excluir_pk=None):
     """Retorna (contato_conflitante, motivo) ou (None, None).
 
-    Regra: nome (sem diferenciar caixa), email (sem diferenciar caixa) ou
+    Regra: nome (sem diferenciar caixa), e-mail (sem diferenciar caixa) ou
     telefone (comparando apenas os dígitos) idênticos a um contato ativo
     existente configuram duplicata.
     """
@@ -159,7 +179,7 @@ class FluxoViewSet(viewsets.ModelViewSet):
 
 
 def _verificar_orcamento_duplicado(numero, excluir_pk=None):
-    """RF-26: devolve a tarefa ativa com o mesmo numero_orcamento, se houver."""
+    """RF-26: devolve a tarefa ativa com o mesmo número_orcamento, se houver."""
     if not numero:
         return None
     qs = Tarefa.objects.filter(deletado=False, numero_orcamento__iexact=numero)
@@ -198,7 +218,7 @@ class TarefaViewSet(viewsets.ModelViewSet):
     def _resposta_orcamento_duplicado(self, numero, conflito):
         return Response({
             'detail': (
-                f'O numero de orcamento {numero} ja esta associado '
+                f'O número de orçamento {numero} já está associado '
                 f'a outra tarefa ativa.'
             ),
             'reason': 'numero_orcamento',
@@ -230,7 +250,8 @@ class TarefaViewSet(viewsets.ModelViewSet):
                         tarefa=tarefa,
                         texto=passo.texto,
                         ordem=ordem_count,
-                        tipo='fluxo'
+                        tipo='fluxo',
+                        opcoes=list(passo.opcoes or []),
                     )
                     ordem_count += 1
                 Subtarefa.objects.create(
@@ -499,9 +520,17 @@ class SubtarefaViewSet(viewsets.ModelViewSet):
 
 
 class MetricasView(APIView):
-    """RF-31: metricas operacionais do quadro."""
+    """RF-31: métricas operacionais do quadro."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        parameters=PARAMETROS_PERIODO,
+        responses={200: OpenApiTypes.OBJECT},
+        description=(
+            'Calcula o pacote de métricas operacionais do quadro, '
+            'opcionalmente limitado pelo período informado.'
+        ),
+    )
     def get(self, request):
         queryset = Tarefa.objects.filter(deletado=False)
         metricas = calcular_metricas(
@@ -513,9 +542,14 @@ class MetricasView(APIView):
 
 
 class ExportarTarefasView(APIView):
-    """RF-32: exportacao de tarefas em CSV."""
+    """RF-32: exportação de tarefas em CSV."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        parameters=PARAMETROS_PERIODO,
+        responses={(200, 'text/csv'): OpenApiTypes.BINARY},
+        description='Exporta as tarefas em CSV separado por ponto e vírgula (BOM UTF-8).',
+    )
     def get(self, request):
         queryset = Tarefa.objects.filter(deletado=False)
         csv_texto = exportar_tarefas_csv(
@@ -529,9 +563,14 @@ class ExportarTarefasView(APIView):
 
 
 class ExportarTransicoesView(APIView):
-    """RF-32: exportacao do historico de transicoes em CSV."""
+    """RF-32: exportação do histórico de transições em CSV."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        parameters=PARAMETROS_PERIODO,
+        responses={(200, 'text/csv'): OpenApiTypes.BINARY},
+        description='Exporta o histórico de transições em CSV separado por ponto e vírgula (BOM UTF-8).',
+    )
     def get(self, request):
         queryset = Tarefa.objects.filter(deletado=False)
         csv_texto = exportar_transicoes_csv(
