@@ -1,4 +1,4 @@
-# Migração gerada para a versão v1.2.0 - RF-23
+# Migração gerada para a versão v1.3.0 - RF-23
 from django.db import migrations, models
 
 

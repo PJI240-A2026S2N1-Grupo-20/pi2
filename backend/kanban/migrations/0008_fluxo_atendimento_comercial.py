@@ -1,4 +1,4 @@
-# Migração de dados para a versão v1.2.0 - RF-21
+# Migração de dados para a versão v1.3.0 - RF-21
 #
 # Cria o modelo de fluxo padrão com o nome "Atendimento Comercial", que é o
 # mesmo nome consultado pelo parser de entrada assistida (RF-24) ao sugerir
