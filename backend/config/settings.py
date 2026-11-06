@@ -143,7 +143,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'EletroKanban API',
     'DESCRIPTION': 'API REST para o Sistema de Gestão de Negociações EletroKanban',
-    'VERSION': '1.3.0',
+    'VERSION': '1.3.1',
     'ENUM_NAME_OVERRIDES': {
         'EstadoTarefaEnum': 'kanban.models.Tarefa.ESTADO_CHOICES',
     },

@@ -1,4 +1,4 @@
-"""Testes exclusivos da versão v1.3.0: RF-15, RF-21, RF-23 e RNF-04."""
+"""Testes exclusivos da versão v1.3.1: RF-15, RF-21, RF-23 e RNF-04."""
 from datetime import date
 
 from django.test import TestCase
