@@ -68,6 +68,7 @@ services:
         condition: service_healthy
     volumes:
       - media_data:/var/www/media:ro
+      - static_data:/var/www/static:ro
     ports:
       - "${FRONTEND_PORT:-8080}:80"
     healthcheck:
@@ -76,15 +77,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-
-  # ---------------------------------------------------------------
-  # Serviços de teste (perfil "test").
-  # Não sobem no docker compose up padrão. São invocados com:
-  #   docker compose --profile test run --rm backend-test
-  #   docker compose --profile test run --rm frontend-test
-  # Reaproveitam o postgres. O Django cria um banco "test_<nome>"
-  # isolado, aplica migrações e descarta ao final.
-  # ---------------------------------------------------------------
 
   backend-test:
     build:
@@ -103,8 +95,6 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-eletrokanban}
       DB_HOST: postgres
       DB_PORT: 5432
-    # Limpa o entrypoint de produção (que roda migrate + gunicorn)
-    # e executa apenas a suíte de testes do Django.
     entrypoint: []
     command: ["python", "manage.py", "test", "accounts", "kanban", "--verbosity=2"]
 
@@ -112,8 +102,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      # Usa apenas o estágio "builder" (Node), que contém devDependencies
-      # e código-fonte. Evita subir o nginx só para rodar testes.
       target: builder
     profiles: [test]
     entrypoint: []
