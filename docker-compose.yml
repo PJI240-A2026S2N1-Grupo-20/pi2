@@ -50,10 +50,10 @@ services:
       - "${BACKEND_PORT_PUBLIC:-8000}:8000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/"]
-      interval: 30s
+      interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 20s
+      retries: 5
+      start_period: 60s # Aumentado para o collectstatic não derrubar o healthcheck
 
   frontend:
     build:
@@ -65,7 +65,7 @@ services:
     restart: unless-stopped
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_healthy # Aguarda o backend ficar saudável
     volumes:
       - media_data:/var/www/media:ro
       - static_data:/var/www/static:ro
